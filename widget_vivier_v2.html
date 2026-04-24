@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon profil formateur — EAFC Créteil</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+:root {
+  --marine:   #1a3a5c;
+  --rose:     #c0415a;
+  --teal:     #2a7f7f;
+  --grey-bg:  #f5f6f8;
+  --grey-brd: #d0d5dd;
+  --warn-bg:  #fff4e0;
+  --warn-brd: #e8a020;
+  --warn-txt: #7a4800;
+  --font:     'Calibri', 'Segoe UI', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); font-size: 14px; background: var(--grey-bg); color: #222; min-height: 100vh; }
+
+#warning-banner {
+  background: var(--warn-bg); border-bottom: 2px solid var(--warn-brd);
+  color: var(--warn-txt); padding: 8px 16px; font-size: 13px;
+  display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100;
+}
+#header {
+  background: var(--marine); color: white; padding: 14px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+#header h1 { font-size: 16px; font-weight: 600; }
+#user-badge { font-size: 12px; background: rgba(255,255,255,0.15); border-radius: 4px; padding: 4px 10px; white-space: nowrap; }
+
+#status-bar { padding: 8px 20px; font-size: 13px; display: none; align-items: center; gap: 8px; }
+#status-bar.new-user { background: #e8f0fe; border-bottom: 1px solid #4a7fd4; color: #1a3a8a; display: flex; }
+#status-bar.dirty    { background: #fff0f0; border-bottom: 1px solid var(--rose); color: var(--rose); display: flex; }
+#status-bar.saved    { background: #eafaf1; border-bottom: 1px solid #27ae60; color: #1a6b3a; display: flex; }
+#status-bar.error    { background: #fff0f0; border-bottom: 1px solid var(--rose); color: var(--rose); display: flex; }
+
+#email-screen { display: none; padding: 40px 20px; max-width: 480px; margin: 0 auto; }
+.email-card { background: white; border: 1px solid var(--grey-brd); border-radius: 8px; padding: 28px; }
+.email-card h2 { font-size: 15px; font-weight: 600; color: var(--marine); margin-bottom: 8px; }
+.email-card p  { font-size: 13px; color: #555; margin-bottom: 20px; line-height: 1.5; }
+.email-card p small { color: #888; font-size: 12px; }
+.email-card label { display: block; font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.email-card input { width: 100%; border: 1px solid var(--grey-brd); border-radius: 4px; padding: 8px 10px; font-family: var(--font); font-size: 13px; margin-bottom: 16px; }
+.email-card input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 2px rgba(42,127,127,0.15); }
+.email-card button { background: var(--teal); color: white; border: none; border-radius: 5px; padding: 10px 24px; font-family: var(--font); font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; }
+.email-card button:hover { background: #1e6060; }
+#email-error { color: var(--rose); font-size: 12px; margin-top: 8px; display: none; }
+
+#loading { padding: 40px 20px; text-align: center; color: #666; display: none; }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--grey-brd); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#error-msg { padding: 40px 20px; text-align: center; color: var(--rose); display: none; }
+
+#form-container { padding: 16px 20px 80px; display: none; }
+.section { background: white; border: 1px solid var(--grey-brd); border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
+.section-title { background: var(--marine); color: white; font-size: 13px; font-weight: 600; padding: 8px 14px; letter-spacing: 0.04em; text-transform: uppercase; }
+.section-title.teal { background: var(--teal); }
+.section-title.rose { background: var(--rose); }
+
+.fields-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.fields-grid.single { grid-template-columns: 1fr; }
+.fields-grid.three  { grid-template-columns: 1fr 1fr 1fr; }
+.field { padding: 10px 14px; border-bottom: 1px solid var(--grey-brd); border-right: 1px solid var(--grey-brd); }
+.field:nth-child(2n) { border-right: none; }
+.fields-grid.single .field { border-right: none; }
+.fields-grid.three .field:nth-child(2n) { border-right: 1px solid var(--grey-brd); }
+.fields-grid.three .field:nth-child(3n) { border-right: none; }
+.field > label { display: block; font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.field input[type=text], .field input[type=email], .field input[type=number], .field select, .field textarea {
+  width: 100%; border: 1px solid var(--grey-brd); border-radius: 4px;
+  padding: 6px 8px; font-family: var(--font); font-size: 13px; color: #222;
+  background: white; transition: border-color 0.15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none; border-color: var(--teal); box-shadow: 0 0 0 2px rgba(42,127,127,0.15);
+}
+.field textarea { min-height: 72px; resize: vertical; }
+.field input[readonly] { background: var(--grey-bg); color: #555; cursor: default; }
+
+/* CASES À COCHER */
+.checkbox-group { display: flex; flex-direction: column; gap: 4px; }
+.checkbox-group.two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.checkbox-item { display: flex; align-items: flex-start; gap: 7px; cursor: pointer; padding: 3px 4px; border-radius: 3px; }
+.checkbox-item:hover { background: var(--grey-bg); }
+.checkbox-item input[type=checkbox] { margin-top: 2px; flex-shrink: 0; accent-color: var(--teal); width: 14px; height: 14px; cursor: pointer; }
+.checkbox-item span { font-size: 13px; color: #333; line-height: 1.4; }
+.checkbox-group-header { font-size: 11px; font-weight: 700; color: var(--marine); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 10px; margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px solid var(--grey-brd); }
+.checkbox-group-header:first-child { margin-top: 0; }
+
+#save-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 2px solid var(--grey-brd); padding: 12px 20px; display: none; align-items: center; justify-content: space-between; gap: 12px; z-index: 50; }
+#save-bar.visible { display: flex; }
+#save-hint { font-size: 12px; color: #888; }
+#btn-save { background: var(--teal); color: white; border: none; border-radius: 5px; padding: 10px 28px; font-family: var(--font); font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
+#btn-save:hover { background: #1e6060; }
+#btn-save.dirty { background: var(--rose); }
+#btn-save.dirty:hover { background: #a03348; }
+#btn-save:disabled { background: #aaa; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<div id="warning-banner">
+  <span>⚠️</span>
+  <span><strong>Attention&nbsp;:</strong> Ce formulaire ne s'enregistre pas automatiquement. Cliquez sur <strong>Enregistrer</strong> en bas de page pour sauvegarder vos modifications.</span>
+</div>
+
+<div id="header">
+  <h1>Mon profil formateur — EAFC Créteil</h1>
+  <div id="user-badge">—</div>
+</div>
+
+<div id="status-bar"></div>
+
+<div id="email-screen">
+  <div class="email-card">
+    <h2>Identification</h2>
+    <p>Saisissez votre adresse email académique pour accéder à votre profil formateur.<br><small>Elle sera mémorisée sur cet appareil pour vos prochaines visites.</small></p>
+    <label for="email-input">Email académique</label>
+    <input type="email" id="email-input" placeholder="Prenom.Nom@ac-creteil.fr">
+    <button onclick="confirmEmail()">Accéder à mon profil</button>
+    <div id="email-error">Veuillez saisir une adresse email valide.</div>
+  </div>
+</div>
+
+<div id="loading"><div class="spinner"></div>Chargement de votre profil…</div>
+<div id="error-msg"></div>
+
+<div id="form-container">
+
+  <!-- IDENTITÉ -->
+  <div class="section">
+    <div class="section-title">Identité</div>
+    <div class="fields-grid three">
+      <div class="field"><label>Civilité</label>
+        <select id="f_Civilite"><option value="">--</option><option value="M">M</option><option value="Mme">Mme</option></select></div>
+      <div class="field"><label>Nom</label><input type="text" id="f_Nom"></div>
+      <div class="field"><label>Prénom</label><input type="text" id="f_Prenom"></div>
+    </div>
+    <div class="fields-grid">
+      <div class="field"><label>Login académique (email)</label><input type="text" id="f_Login_acad" readonly></div>
+      <div class="field"><label>Téléphone</label><input type="text" id="f_Tel"></div>
+    </div>
+    <div class="fields-grid">
+      <div class="field"><label>Commune de résidence</label><input type="text" id="f_Commune_residence"></div>
+      <div class="field"><label>Code postal de résidence</label><input type="text" id="f_CP_residence"></div>
+    </div>
+  </div>
+
+  <!-- ÉTABLISSEMENT -->
+  <div class="section">
+    <div class="section-title teal">Établissement d'exercice</div>
+    <div class="fields-grid">
+      <div class="field"><label>Code UAI</label><input type="text" id="f_Code_UAI"></div>
+      <div class="field"><label>Type d'établissement</label><input type="text" id="f_Type_etablissement"></div>
+    </div>
+    <div class="fields-grid">
+      <div class="field"><label>Nom de l'établissement</label><input type="text" id="f_Nom_etablissement"></div>
+      <div class="field"><label>CP / Ville établissement</label><input type="text" id="f_CP_Ville_etab"></div>
+    </div>
+  </div>
+
+  <!-- DISCIPLINE & FONCTION -->
+  <div class="section">
+    <div class="section-title">Discipline et fonction</div>
+    <div class="fields-grid">
+      <div class="field"><label>Discipline de recrutement</label>
+        <input type="text" id="f_Discipline_recrutement" list="list_disciplines">
+        <datalist id="list_disciplines"></datalist></div>
+      <div class="field"><label>Discipline d'exercice</label>
+        <input type="text" id="f_Discipline_exercice" list="list_disciplines"></div>
+    </div>
+    <div class="fields-grid">
+      <div class="field"><label>Fonction</label>
+        <input type="text" id="f_Fonction" list="list_fonctions">
+        <datalist id="list_fonctions"></datalist></div>
+      <div class="field"><label>Précision de fonction</label><input type="text" id="f_Fonction_precision"></div>
+    </div>
+    <div class="fields-grid">
+      <div class="field"><label>Type de candidat</label>
+        <select id="f_Type_candidat">
+          <option value="">--</option>
+          <option value="1 - PERSONNEL DE L'ACADEMIE DE CRETEIL / INSPE / CANOPE">1 - Personnel de l'académie / INSPE / CANOPE</option>
+          <option value="2 - Partenaire extérieur">2 - Partenaire extérieur</option>
+        </select></div>
+      <div class="field"><label>Lieu d'exercice — type</label>
+        <select id="f_Lieu_exercice_type">
+          <option value="">--</option>
+          <option>Rectorat</option><option>DSDEN</option><option>Circonscription</option>
+          <option>Ecole</option><option>Collège</option><option>Lycée professionnel</option>
+          <option>Lycée général et technologique</option><option>Université</option>
+          <option>INSPE Créteil</option><option>CANOPE</option><option>CIO</option>
+        </select></div>
+    </div>
+    <div class="fields-grid">
+      <div class="field"><label>Lieu d'exercice — nom</label><input type="text" id="f_Lieu_exercice_nom"></div>
+      <div class="field"><label>Lieu d'exercice — CP / Ville</label><input type="text" id="f_Lieu_exercice_CP_ville"></div>
+    </div>
+  </div>
+
+  <!-- EXPÉRIENCE -->
+  <div class="section">
+    <div class="section-title rose">Expérience et profil déclaratif</div>
+    <div class="fields-grid">
+      <div class="field"><label>Expérience formation (heures)</label><input type="number" id="f_Experience_formation_heures" min="0"></div>
+      <div class="field"></div>
+    </div>
+  </div>
+
+  <!-- CADRE D'INTERVENTION -->
+  <div class="section">
+    <div class="section-title rose">Cadre d'intervention</div>
+    <div class="fields-grid single">
+      <div class="field">
+        <label>Types de formations assurées</label>
+        <div class="checkbox-group" id="cb_Cadre_intervention"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DOMAINES D'INTERVENTION -->
+  <div class="section">
+    <div class="section-title rose">Domaines d'intervention</div>
+    <div class="fields-grid single">
+      <div class="field">
+        <label>Sélectionnez vos domaines d'intervention</label>
+        <div class="checkbox-group" id="cb_Domaines_intervention"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PUBLIC CIBLE -->
+  <div class="section">
+    <div class="section-title rose">Public cible</div>
+    <div class="fields-grid single">
+      <div class="field">
+        <label>Publics que vous formez</label>
+        <div class="checkbox-group two-cols" id="cb_Public_cible"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPERTISE -->
+  <div class="section">
+    <div class="section-title rose">Modalités d'intervention</div>
+    <div class="fields-grid single">
+      <div class="field">
+        <label>Modalités spécifiques maîtrisées</label>
+        <div class="checkbox-group" id="cb_Expertise_intervention"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZONES GÉO -->
+  <div class="section">
+    <div class="section-title rose">Zones géographiques d'intervention</div>
+    <div class="fields-grid single">
+      <div class="field">
+        <label>Zones où vous pouvez intervenir</label>
+        <div class="checkbox-group two-cols" id="cb_Zones_geo"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /form-container -->
+
+<div id="save-bar">
+  <span id="save-hint"></span>
+  <button id="btn-save" onclick="saveRecord()">Enregistrer</button>
+</div>
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────────────────
+const TABLE = 'Vivier_formateurs';
+
+// Colonnes texte simples (gérées via input/select)
+const TEXT_COLS = [
+  'Civilite','Nom','Prenom','Login_acad','Tel',
+  'Commune_residence','CP_residence',
+  'Code_UAI','Type_etablissement','Nom_etablissement','CP_Ville_etab',
+  'Discipline_recrutement','Discipline_exercice',
+  'Fonction','Fonction_precision','Type_candidat',
+  'Lieu_exercice_type','Lieu_exercice_nom','Lieu_exercice_CP_ville',
+  'Experience_formation_heures'
+];
+
+// Colonnes multi-valeurs (gérées via cases à cocher)
+const MULTI_COLS = [
+  'Cadre_intervention',
+  'Domaines_intervention',
+  'Public_cible',
+  'Expertise_intervention',
+  'Zones_geo'
+];
+
+const VISIBLE_COLS = [...TEXT_COLS, ...MULTI_COLS];
+
+// ── LISTES DE CHOIX ──────────────────────────────────────────────────────
+const DISCIPLINES = [
+  'ALLEMAND','ALLEMAND-LETTRES','ANGLAIS','ANGLAIS-LETTRES',
+  'ARTS APPLIQUES','ARTS PLASTIQUES',
+  'BIOCHIMIE-BIOLOGIE-BIOTECHNOLOGIE',
+  'BIOTECHNOLOGIE BIOCHIMIE GENIE BIOLOGIQUE',
+  'BIOTECHNOLOGIES: SANTE ENVIRONNEMENT',
+  'COORDINATION ET INGENIERIE DE FORMATION','DDFPT','DOCUMENTATION',
+  'ECO ET GEST.OPTION COMM, ORG, GRH','ECO-GEST OPTION COMMERCE ET VENTE',
+  'ECO-GEST OPTION GEST ET ADM','ECO-GEST.OPTION MARKETING',
+  'ECONOMIE ET GESTION','EDU.DEV.CONS.ORI','EDUCATION',
+  'EDUCATION ARTISTIQUE ET ARTS APPLIQUES',
+  'EDUCATION MUSICALE ET CHANT CHORAL','EDUCATION PHYSIQUE ET SPORTIVE',
+  'ESPAGNOL','GENIE ELECTRIQUE : ELECTROTECHNIQUE',
+  'GENIE MECA MAINTENANCE SYST.MECA.AUTOMAT',
+  'GENIE MECANIQUE OPTION PRODUCTIQUE','GEOGRAPHIE','HISTOIRE-GEOGRAPHIE',
+  'HOTELLERIE : SERVICES-COMMERCIALISATION',"INDUSTRIE DE L'HABILLEMENT",
+  'INTERVENANT AMM','ITALIEN','LETTRES CLASSIQUES','LETTRES MODERNES',
+  'LETTRES-HISTOIRE-GEOGRAPHIE','MATHEMATIQUES',
+  'MATHEMATIQUES-SCIENCES PHYSIQUES','MUSIQUE','PATISSERIE',
+  'PREVENTION SECURITE','SANS SPECIALITE','SCIENCES DE LA VIE ET DE LA TERRE',
+  'SCIENCES ECONOMIQUES ET SOCIALES',
+  'SCIENCES ET TECHNIQUES MEDICO-SOCIALES','SCIENCES PHYSIQUES ET CHIMIQUES',
+  'SCIENCES SOCIALES','SII OPT INGENIERIE ELECTRIQUE',
+  'SII OPT INGENIERIE INFORMATIQUE','TECHNOLOGIE',
+  'TECHNOLOGIE : CONSTRUCTION ELECTRIQUE','TECHNOLOGIE : GESTION'
+];
+
+const FONCTIONS = [
+  "1 - Personnel d'éducation","2 - Personnel de direction",
+  "3 - Personnel des corps d'inspection","4 - Personnel d'enseignement",
+  "5 - Personnel d'encadrement administratif","6 - Personnel administratif",
+  "7 - Personnel sociaux et de santé","8 - Personnel de laboratoire",
+  "9 - Personnel INSPÉ","10 - Personnel CANOPÉ",
+  "11 - Psychologues de l'Education nationale"
+];
+
+// Définition des listes multi-valeurs
+// format : { col, items: [ {label, group?} ] }
+const MULTI_LISTS = {
+  Cadre_intervention: [
+    { label: "1 - Formations d'initiative locale" },
+    { label: "2 - Formations académiques ou déclinées localement" },
+    { label: "3 - Formation de formateurs" },
+    { label: "4 - Formations pour les entrants dans les métiers" },
+    { label: "5 - Accompagnement individuel (tutorat, mentorat)" },
+    { label: "6 - Formations en regroupement académique" }
+  ],
+  Domaines_intervention: [
+    { label: "1.01 - Former aux outils spécifiques de gestion ou de suivi des élèves", group: "COMPÉTENCES SPÉCIFIQUES DE CERTAINS MÉTIERS" },
+    { label: "1.02 - Renforcer la professionnalisation des acteurs de la filière RH" },
+    { label: "1.03 - Consolider les compétences managériales et de pilotage" },
+    { label: "2.01 - Agir en faveur de la transition écologique", group: "COMPÉTENCES PARTAGÉES" },
+    { label: "2.02 - Améliorer le bien-être des élèves et des personnels" },
+    { label: "2.03 - Former les personnels aux valeurs de la République et à leur transmission" },
+    { label: "2.04 - Contribuer à rendre l'environnement professionnel accessible et inclusif" },
+    { label: "2.05 - Renforcer la culture administrative et juridique" },
+    { label: "2.06 - Former à l'hybridation et à la scénarisation" },
+    { label: "2.07 - Former à l'animation d'équipe et à l'intelligence collective" },
+    { label: "2.08 - Former aux fondamentaux et aux usages de l'IA" },
+    { label: "2.09 - Coopérer pour une école inclusive" },
+    { label: "2.10 - Assurer la sécurité des espaces scolaires et professionnels" },
+    { label: "3.01 - Construire une relation éducative de qualité", group: "COMPÉTENCES DES ÉLÈVES" },
+    { label: "3.02 - Renforcer les compétences psychosociales" },
+    { label: "3.03 - Construire la citoyenneté et développer l'esprit critique" },
+    { label: "3.04 - Accompagner le parcours des élèves et des jeunes" },
+    { label: "3.05 - Egalité filles garçons" },
+    { label: "3.06 - EVARS - Education à la vie affective et relationnelle, et à la sexualité" },
+    { label: "3.07 - Education au développement durable" },
+    { label: "3.08 - Education artistique et culturelle" },
+    { label: "3.09 - Education aux médias et à l'information" },
+    { label: "3.10 - Education au numérique éducatif" },
+    { label: "3.11 - Rendre l'enseignement inclusif et accessible à tous" },
+    { label: "3.12 - Renforcer la maîtrise des savoirs disciplinaires" },
+    { label: "3.13 - Renforcer les compétences de communication écrite et orale" },
+    { label: "3.14 - Développer les pratiques coopératives" },
+    { label: "3.15 - Maîtrise de la langue" },
+    { label: "3.16 - Sciences cognitives" }
+  ],
+  Public_cible: [
+    { label: "1 - Personnel d'enseignement" },
+    { label: "2 - Personnels sociaux et de santé" },
+    { label: "3 - Personnels administratifs" },
+    { label: "4 - Personnels d'éducation" },
+    { label: "5 - Personnels d'encadrement" },
+    { label: "6 - Psychologues de l'éducation nationale" },
+    { label: "7 - Intermétier" },
+    { label: "8 - Entrants dans les métiers" },
+    { label: "9 - Formateurs" }
+  ],
+  Expertise_intervention: [
+    { label: "Dans la formation à distance" },
+    { label: "Dans la formation en lycée professionnel" }
+  ],
+  Zones_geo: [
+    { label: "- Val de Marne Ouest", group: "VAL DE MARNE (94)" },
+    { label: "- Val de Marne Est" },
+    { label: "- Seine-Saint-Denis Ouest", group: "SEINE-SAINT-DENIS (93)" },
+    { label: "- Seine-Saint-Denis Est" },
+    { label: "- Seine-et-Marne Sud", group: "SEINE-ET-MARNE (77)" },
+    { label: "- Seine-et-Marne Centre" },
+    { label: "- Seine-et-Marne Nord" }
+  ]
+};
+
+// ── ÉTAT ─────────────────────────────────────────────────────────────────
+let rowId        = null;
+let originalData = {};
+let isDirty      = false;
+
+// ── INIT ─────────────────────────────────────────────────────────────────
+grist.ready({ requiredAccess: 'full' });
+
+window.addEventListener('load', () => {
+  populateDatalist('list_disciplines', DISCIPLINES);
+  populateDatalist('list_fonctions', FONCTIONS);
+  buildCheckboxGroups();
+
+  const storedEmail = localStorage.getItem('eafc_widget_email');
+  if (storedEmail) {
+    document.getElementById('user-badge').textContent = storedEmail;
+    showLoading(true);
+    loadProfile(storedEmail).catch(err => showError('Erreur : ' + err.message));
+  } else {
+    document.getElementById('email-screen').style.display = 'block';
+    document.getElementById('save-bar').classList.add('visible');
+  }
+});
+
+// ── CONSTRUCTION DES CASES À COCHER ──────────────────────────────────────
+function buildCheckboxGroups() {
+  Object.entries(MULTI_LISTS).forEach(([col, items]) => {
+    const container = document.getElementById('cb_' + col);
+    if (!container) return;
+    items.forEach(item => {
+      if (item.group) {
+        const h = document.createElement('div');
+        h.className = 'checkbox-group-header';
+        h.textContent = item.group;
+        container.appendChild(h);
+      }
+      const lbl = document.createElement('label');
+      lbl.className = 'checkbox-item';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = item.label;
+      cb.dataset.col = col;
+      cb.addEventListener('change', onFieldChange);
+      const span = document.createElement('span');
+      span.textContent = item.label;
+      lbl.appendChild(cb);
+      lbl.appendChild(span);
+      container.appendChild(lbl);
+    });
+  });
+}
+
+// ── SAISIE EMAIL ─────────────────────────────────────────────────────────
+function confirmEmail() {
+  const input = document.getElementById('email-input');
+  const val   = input.value.trim().toLowerCase();
+  if (!val || !val.includes('@')) {
+    document.getElementById('email-error').style.display = 'block';
+    return;
+  }
+  document.getElementById('email-error').style.display = 'none';
+  localStorage.setItem('eafc_widget_email', val);
+  document.getElementById('email-screen').style.display = 'none';
+  document.getElementById('user-badge').textContent = val;
+  showLoading(true);
+  loadProfile(val).catch(err => showError('Erreur : ' + err.message));
+}
+
+// ── CHARGER LE PROFIL ────────────────────────────────────────────────────
+async function loadProfile(email) {
+  showLoading(true);
+  try {
+    const table = await grist.docApi.fetchTable(TABLE);
+    const idx = table.Login_acad.findIndex(
+      v => (v || '').toLowerCase() === (email || '').toLowerCase()
+    );
+
+    if (idx >= 0) {
+      rowId = table.id[idx];
+      const data = {};
+      VISIBLE_COLS.forEach(col => {
+        data[col] = (table[col] !== undefined) ? table[col][idx] : '';
+      });
+      originalData = { ...data };
+      fillForm(data);
+      setStatus('existing');
+    } else {
+      rowId = null;
+      originalData = {};
+      fillForm({ Login_acad: email });
+      setStatus('new');
+    }
+
+    showLoading(false);
+    document.getElementById('form-container').style.display = 'block';
+    document.getElementById('save-bar').classList.add('visible');
+
+  } catch(err) {
+    showError('Impossible de charger la table Vivier_formateurs : ' + err.message);
+  }
+}
+
+// ── REMPLIR LE FORMULAIRE ────────────────────────────────────────────────
+function fillForm(data) {
+  // Champs texte simples
+  TEXT_COLS.forEach(col => {
+    const el = document.getElementById('f_' + col);
+    if (!el) return;
+    const raw = (data[col] !== undefined && data[col] !== null) ? data[col] : '';
+    el.value = String(raw === 0 ? '' : raw);
+    if (!el.readOnly) {
+      el.addEventListener('input',  onFieldChange);
+      el.addEventListener('change', onFieldChange);
+    }
+  });
+
+  // Cases à cocher
+  MULTI_COLS.forEach(col => {
+    const raw = (data[col] !== undefined && data[col] !== null) ? String(data[col]) : '';
+    const selected = raw.split('\n').map(s => s.trim()).filter(Boolean);
+    const container = document.getElementById('cb_' + col);
+    if (!container) return;
+    container.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.checked = selected.includes(cb.value);
+    });
+  });
+}
+
+// ── DÉTECTION DES MODIFICATIONS ──────────────────────────────────────────
+function onFieldChange() {
+  const current = getFormData();
+  isDirty = VISIBLE_COLS.some(col => {
+    if (MULTI_COLS.includes(col)) {
+      return (current[col] || '') !== (originalData[col] || '');
+    }
+    const el = document.getElementById('f_' + col);
+    if (!el || el.readOnly) return false;
+    return String(current[col] || '') !== String(originalData[col] || '');
+  });
+  updateSaveButton();
+}
+
+function updateSaveButton() {
+  const btn  = document.getElementById('btn-save');
+  const hint = document.getElementById('save-hint');
+  const bar  = document.getElementById('status-bar');
+  if (isDirty) {
+    btn.classList.add('dirty');
+    btn.textContent = 'Enregistrer les modifications';
+    hint.textContent = '⚠ Modifications non enregistrées';
+    bar.className = 'dirty';
+    bar.innerHTML = '⚠️ &nbsp;Vous avez des modifications non enregistrées. Cliquez sur <strong>Enregistrer</strong> pour les sauvegarder.';
+  } else {
+    btn.classList.remove('dirty');
+    btn.textContent = 'Enregistrer';
+    hint.textContent = '';
+    if (bar.classList.contains('dirty')) bar.style.display = 'none';
+  }
+}
+
+// ── DONNÉES DU FORMULAIRE ────────────────────────────────────────────────
+function getFormData() {
+  const data = {};
+
+  // Champs texte
+  TEXT_COLS.forEach(col => {
+    const el = document.getElementById('f_' + col);
+    if (!el) return;
+    if (el.readOnly) { data[col] = originalData[col] || el.value; return; }
+    let val = el.value.trim();
+    if (col === 'Experience_formation_heures') val = val ? parseInt(val) : null;
+    data[col] = val;
+  });
+
+  // Cases à cocher → jointure par \n (format Grist Choice List)
+  MULTI_COLS.forEach(col => {
+    const container = document.getElementById('cb_' + col);
+    if (!container) { data[col] = ''; return; }
+    const checked = [...container.querySelectorAll('input[type=checkbox]:checked')]
+      .map(cb => cb.value);
+    data[col] = checked.join('\n');
+  });
+
+  return data;
+}
+
+// ── ENREGISTRER ──────────────────────────────────────────────────────────
+async function saveRecord() {
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement…';
+  try {
+    const data = getFormData();
+    const now  = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const colValues = { ...data, Date_modification_candidature: now };
+
+    if (rowId !== null) {
+      await grist.docApi.applyUserActions([['UpdateRecord', TABLE, rowId, colValues]]);
+    } else {
+      const result = await grist.docApi.applyUserActions([['AddRecord', TABLE, null, colValues]]);
+      rowId = result.retValues[0];
+    }
+
+    originalData = getFormData();
+    isDirty = false;
+    setStatus('saved');
+    btn.classList.remove('dirty');
+    btn.textContent = 'Enregistrer';
+    btn.disabled = false;
+    document.getElementById('save-hint').textContent = '✓ Enregistré à ' + new Date().toLocaleTimeString('fr-FR');
+    setTimeout(() => {
+      const bar = document.getElementById('status-bar');
+      if (bar.classList.contains('saved')) bar.style.display = 'none';
+      document.getElementById('save-hint').textContent = '';
+    }, 4000);
+
+  } catch(err) {
+    const bar = document.getElementById('status-bar');
+    bar.className = 'error';
+    bar.innerHTML = '❌ &nbsp;Erreur lors de l\'enregistrement : ' + err.message;
+    btn.disabled = false;
+    btn.textContent = 'Enregistrer';
+  }
+}
+
+// ── UTILITAIRES ──────────────────────────────────────────────────────────
+function setStatus(state) {
+  const bar = document.getElementById('status-bar');
+  if (state === 'new') {
+    bar.className = 'new-user';
+    bar.innerHTML = '🆕 &nbsp;Votre profil n\'existe pas encore dans le vivier. Remplissez le formulaire et cliquez sur <strong>Enregistrer</strong> pour créer votre fiche.';
+  } else if (state === 'existing') {
+    bar.style.display = 'none';
+  } else if (state === 'saved') {
+    bar.className = 'saved';
+    bar.innerHTML = '✅ &nbsp;Votre profil a bien été enregistré.';
+  }
+}
+
+function showLoading(show) {
+  document.getElementById('loading').style.display = show ? 'block' : 'none';
+}
+
+function showError(msg) {
+  showLoading(false);
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function populateDatalist(id, items) {
+  const dl = document.getElementById(id);
+  if (!dl) return;
+  items.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    dl.appendChild(opt);
+  });
+}
+</script>
+</body>
+</html>

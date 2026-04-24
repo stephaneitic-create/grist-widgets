@@ -583,7 +583,7 @@ function getFormData() {
     if (!container) { data[col] = ''; return; }
     const checked = [...container.querySelectorAll('input[type=checkbox]:checked')]
       .map(cb => cb.value);
-    data[col] = checked.join('\n');
+    data[col] = JSON.stringify(checked);
   });
 
   return data;

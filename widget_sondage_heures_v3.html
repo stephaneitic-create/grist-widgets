@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sondage heures INSPE / LPE / M2E — EAFC Créteil</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+/* ─── Identité visuelle EAFC ──────────────────────────────────────────────
+   Marine   #292779  — couleur institutionnelle principale
+   Bleu clair #adc3e6 — teinte secondaire, fonds discrets
+   Jaune    #ffcc00  — accent unique (soulignement du titre, focus)
+   Rose     #e57eb0  — signalétique "déjà répondu / à corriger"
+   Crème    #fff7e5  — fond de page
+   Sarcelle #6bbdbf  — action principale (bouton Enregistrer)
+   ────────────────────────────────────────────────────────────────────── */
+:root {
+  --marine:  #292779;
+  --bleu:    #adc3e6;
+  --jaune:   #ffcc00;
+  --rose:    #e57eb0;
+  --creme:   #fff7e5;
+  --sarcelle:#6bbdbf;
+  --gris-txt:#3a3a3a;
+  --font: 'Calibri', 'Segoe UI', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font); font-size: 14px; color: var(--gris-txt);
+  background: var(--creme); min-height: 100vh;
+}
+
+#header {
+  background: var(--marine); color: white; padding: 18px 24px 14px;
+  border-bottom: 4px solid var(--jaune);
+}
+#header h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.01em; }
+#header .sub { font-size: 12px; color: var(--bleu); margin-top: 2px; }
+
+#save-warning {
+  background: white; border-bottom: 1px solid var(--bleu);
+  color: var(--marine); padding: 10px 24px; font-size: 12.5px;
+  line-height: 1.5; display: flex; gap: 8px; align-items: flex-start;
+}
+#save-warning strong { color: var(--marine); }
+
+#loading, #error-msg { padding: 60px 24px; text-align: center; color: #666; }
+.spinner {
+  width: 30px; height: 30px; border: 3px solid var(--bleu);
+  border-top-color: var(--marine); border-radius: 50%;
+  animation: spin 0.8s linear infinite; margin: 0 auto 14px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#error-msg { display: none; color: #a03348; }
+#error-msg .contact { font-size: 12.5px; color: #666; margin-top: 10px; }
+
+#app { display: none; max-width: 620px; margin: 0 auto; padding: 20px 20px 90px; }
+
+.identity-bar {
+  background: white; border: 1px solid var(--bleu); border-radius: 6px;
+  padding: 12px 16px; margin-bottom: 18px; font-size: 13.5px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.identity-bar .name { font-weight: 600; color: var(--marine); }
+.identity-bar .exercice { font-size: 12px; color: #777; white-space: nowrap; }
+
+#revisit-banner {
+  background: #fdf1f6; border: 1px solid var(--rose); color: #8a1f47;
+  border-radius: 6px; padding: 12px 16px; margin-bottom: 18px;
+  font-size: 13px; line-height: 1.5; display: none;
+}
+
+.intro-card {
+  background: white; border: 1px solid var(--bleu); border-radius: 6px;
+  padding: 20px 22px; margin-bottom: 20px; font-size: 13.5px; line-height: 1.65;
+  color: var(--gris-txt);
+}
+.intro-card p { margin-bottom: 10px; }
+.intro-card p:last-child { margin-bottom: 0; }
+
+.section {
+  background: white; border: 1px solid var(--bleu); border-radius: 6px;
+  margin-bottom: 18px; overflow: hidden;
+}
+.section-title {
+  background: var(--marine); color: white; font-size: 12.5px; font-weight: 600;
+  padding: 9px 16px; letter-spacing: 0.03em;
+}
+
+.hours-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+.hours-field {
+  padding: 16px; border-right: 1px solid var(--bleu);
+}
+.hours-field:last-child { border-right: none; }
+.hours-field label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--marine);
+  margin-bottom: 8px;
+}
+.hours-field input[type=text] {
+  width: 100%; border: 1px solid var(--bleu); border-radius: 4px;
+  padding: 8px 10px; font-family: var(--font); font-size: 16px;
+  text-align: center; color: var(--marine); font-weight: 600;
+}
+.hours-field input[type=text]:focus {
+  outline: none; border-color: var(--jaune);
+  box-shadow: 0 0 0 2px rgba(255,204,0,0.35);
+}
+
+.comment-field { padding: 16px; }
+.comment-field label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--marine);
+  margin-bottom: 8px;
+}
+.comment-field textarea {
+  width: 100%; min-height: 64px; resize: vertical;
+  border: 1px solid var(--bleu); border-radius: 4px;
+  padding: 8px 10px; font-family: var(--font); font-size: 13px; color: var(--gris-txt);
+}
+.comment-field textarea:focus {
+  outline: none; border-color: var(--jaune);
+  box-shadow: 0 0 0 2px rgba(255,204,0,0.35);
+}
+
+#save-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; background: white;
+  border-top: 2px solid var(--bleu); padding: 12px 20px;
+  display: none; align-items: center; justify-content: space-between; gap: 12px; z-index: 50;
+}
+#save-bar.visible { display: flex; }
+#save-hint { font-size: 12px; color: #888; }
+#btn-save {
+  background: var(--sarcelle); color: white; border: none; border-radius: 5px;
+  padding: 11px 30px; font-family: var(--font); font-size: 14px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: background 0.15s;
+}
+#btn-save:hover { background: #4f9d9e; }
+#btn-save.dirty { background: var(--rose); }
+#btn-save.dirty:hover { background: #cc5f8f; }
+#btn-save:disabled { background: #aaa; cursor: not-allowed; }
+#save-hint.ok { color: #1a6b3a; font-weight: 600; }
+#save-hint.err { color: #a03348; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>École académique de la formation continue — Créteil</h1>
+  <div class="sub">Sondage des heures INSPE / LPE / M2E</div>
+</div>
+
+<div id="save-warning">
+  <span>⚠️</span>
+  <span><strong>Important :</strong> ce formulaire ne s'enregistre pas automatiquement. Merci de cliquer sur le bouton <strong>Enregistrer</strong> en bas de page avant de quitter cette fenêtre, sans quoi votre saisie sera perdue.</span>
+</div>
+
+<div id="loading"><div class="spinner"></div>Chargement de votre profil…</div>
+<div id="error-msg">
+  <div>Nous n'avons pas retrouvé votre fiche formateur déchargé pour l'exercice en cours.</div>
+  <div class="contact">Merci de contacter le service EAFC (ce.eafc@ac-creteil.fr) si vous pensez qu'il s'agit d'une erreur.</div>
+</div>
+
+<div id="app">
+
+  <div class="identity-bar">
+    <span class="name" id="identity-name">—</span>
+    <span class="exercice" id="identity-exercice">—</span>
+  </div>
+
+  <div id="revisit-banner"></div>
+
+  <div class="intro-card">
+    <p>Madame, Monsieur,</p>
+    <p>Vous êtes formatrice ou formateur déchargé(e) pour l'EAFC.<br>
+    Si votre décharge inclut des heures de formation à l'INSPE ou en LPE ou en M2E, nous vous prions de bien vouloir renseigner le total des heures que vous assurerez dans ces structures.<br>
+    En effet, ces formations n'étant pas codées dans SOFIA-FMO, l'EAFC ne pourra pas les décompter de manière automatisée.<br>
+    Merci de bien vouloir uniquement renseigner les heures en chiffres. Par exemple, pour 12 heures, entrez simplement "12".</p>
+    <p>L'EAFC vous remercie pour votre engagement au service de la formation des personnels de l'académie de Créteil.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Heures prévisionnelles par dispositif</div>
+    <div class="hours-grid">
+      <div class="hours-field">
+        <label>INSPE</label>
+        <input type="text" inputmode="decimal" id="f_Heures_INSPE" placeholder="0">
+      </div>
+      <div class="hours-field">
+        <label>LPE</label>
+        <input type="text" inputmode="decimal" id="f_Heures_LPE" placeholder="0">
+      </div>
+      <div class="hours-field">
+        <label>M2E</label>
+        <input type="text" inputmode="decimal" id="f_Heures_M2E" placeholder="0">
+      </div>
+    </div>
+    <div class="comment-field">
+      <label>Commentaire (facultatif)</label>
+      <textarea id="f_Commentaire" placeholder="Précision utile sur votre saisie…"></textarea>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<div id="save-bar">
+  <span id="save-hint"></span>
+  <button id="btn-save" onclick="saveRecord()">Enregistrer</button>
+</div>
+
+<script>
+/* ────────────────────────────────────────────────────────────────────────
+   CONFIGURATION — noms de colonnes à VÉRIFIER contre le schéma réel avant
+   déploiement (posés au fil de notre échange, mais jamais vus en direct
+   par Claude sur ce document Grist précis) :
+   - Formateurs_decharges : exercice_cod, Formateur_actif, Civ_Nom_Prenom
+   - Sondage : Ref_formateur, Login_acad, exercice_cod,
+               Heures_INSPE, Heures_LPE, Heures_M2E, Commentaire, Date_maj
+   ──────────────────────────────────────────────────────────────────────── */
+const TABLE_FORMATEURS = 'Formateurs_decharges';
+const TABLE_SONDAGE    = 'Sondage';
+
+let identity      = null;   // { civNomPrenom, exerciceCod }
+let sondageRowId   = null;  // null = pas encore de ligne Sondage pour cet exercice
+let originalValues = { Heures_INSPE: '', Heures_LPE: '', Heures_M2E: '', Commentaire: '' };
+let isDirty        = false;
+
+grist.ready({ requiredAccess: 'full' });
+
+window.addEventListener('load', init);
+
+async function init() {
+  try {
+    // 1. Identité auto-détectée : la RLS de Formateurs_decharges limite déjà
+    //    cette lecture à la ligne du formateur actuellement connecté. Aucune
+    //    saisie d'email n'est nécessaire ni proposée.
+    const formateurs = await grist.docApi.fetchTable(TABLE_FORMATEURS);
+
+    const activeRows = [];
+    if (formateurs && formateurs.id) {
+      for (let i = 0; i < formateurs.id.length; i++) {
+        if (formateurs.Est_exercice_courant && formateurs.Est_exercice_courant[i]) activeRows.push(i);
+      }
+    }
+
+    if (activeRows.length === 0) {
+      showError();
+      return;
+    }
+    if (activeRows.length > 1) {
+      // La RLS de Formateurs_decharges ne doit renvoyer que la ligne du formateur
+      // connecté. Plusieurs lignes actives visibles ici signalent un accès élargi
+      // (compte propriétaire/administrateur), pas un compte formateur normal :
+      // mieux vaut arrêter net que d'en afficher une au hasard.
+      showError('Accès élargi détecté (' + activeRows.length + ' fiches formateur visibles). '
+        + 'Ce widget doit être ouvert depuis un compte formateur (via « Afficher en tant que » '
+        + 'pour les tests), jamais depuis le compte propriétaire ou administrateur du document.');
+      return;
+    }
+    const idx = activeRows[0];
+
+    identity = {
+      civNomPrenom: (formateurs.Civ_Nom_Prenom && formateurs.Civ_Nom_Prenom[idx]) || '—',
+      exerciceCod:  (formateurs.exercice_cod   && formateurs.exercice_cod[idx])   || ''
+    };
+
+    document.getElementById('identity-name').textContent = identity.civNomPrenom;
+    document.getElementById('identity-exercice').textContent = 'Exercice ' + identity.exerciceCod;
+
+    // 2. Recherche d'une ligne Sondage déjà existante pour cet exercice.
+    //    La RLS de Sondage limite déjà cette lecture aux lignes du formateur
+    //    connecté ; on filtre ici seulement sur l'exercice.
+    const sondage = await grist.docApi.fetchTable(TABLE_SONDAGE);
+    let sIdx = -1;
+    if (sondage && sondage.id) {
+      for (let i = 0; i < sondage.id.length; i++) {
+        if (sondage.exercice_cod && sondage.exercice_cod[i] === identity.exerciceCod) { sIdx = i; break; }
+      }
+    }
+
+    if (sIdx >= 0) {
+      sondageRowId = sondage.id[sIdx];
+      originalValues = {
+        Heures_INSPE: numToStr(sondage.Heures_INSPE ? sondage.Heures_INSPE[sIdx] : 0),
+        Heures_LPE:   numToStr(sondage.Heures_LPE   ? sondage.Heures_LPE[sIdx]   : 0),
+        Heures_M2E:   numToStr(sondage.Heures_M2E   ? sondage.Heures_M2E[sIdx]   : 0),
+        Commentaire:  (sondage.Commentaire ? sondage.Commentaire[sIdx] : '') || ''
+      };
+      showRevisitBanner(sondage.Date_maj ? sondage.Date_maj[sIdx] : null);
+    }
+
+    fillForm(originalValues);
+    attachListeners();
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('save-bar').classList.add('visible');
+
+  } catch (err) {
+    showError('Erreur technique : ' + err.message);
+  }
+}
+
+function showRevisitBanner(dateMaj) {
+  const el = document.getElementById('revisit-banner');
+  const dateTxt = dateMaj ? new Date(dateMaj * 1000).toLocaleDateString('fr-FR') : null;
+  el.innerHTML = '✏️ Vous avez déjà renseigné vos heures pour cet exercice'
+    + (dateTxt ? ' (dernière mise à jour le ' + dateTxt + ')' : '')
+    + '. Vous pouvez corriger les valeurs ci-dessous puis cliquer sur <strong>Enregistrer</strong> pour les mettre à jour.';
+  el.style.display = 'block';
+}
+
+function showError(msg) {
+  document.getElementById('loading').style.display = 'none';
+  const el = document.getElementById('error-msg');
+  if (msg) el.querySelector('div').textContent = msg;
+  el.style.display = 'block';
+}
+
+function fillForm(values) {
+  document.getElementById('f_Heures_INSPE').value = values.Heures_INSPE;
+  document.getElementById('f_Heures_LPE').value   = values.Heures_LPE;
+  document.getElementById('f_Heures_M2E').value   = values.Heures_M2E;
+  document.getElementById('f_Commentaire').value  = values.Commentaire;
+}
+
+function attachListeners() {
+  ['f_Heures_INSPE', 'f_Heures_LPE', 'f_Heures_M2E', 'f_Commentaire'].forEach(id => {
+    document.getElementById(id).addEventListener('input', onFieldChange);
+  });
+}
+
+function onFieldChange() {
+  const current = getFormValues();
+  isDirty = Object.keys(originalValues).some(k => (current[k] || '') !== (originalValues[k] || ''));
+  updateSaveButton();
+}
+
+function updateSaveButton() {
+  const btn = document.getElementById('btn-save');
+  const hint = document.getElementById('save-hint');
+  if (isDirty) {
+    btn.classList.add('dirty');
+    btn.textContent = 'Enregistrer les modifications';
+    hint.className = '';
+    hint.textContent = '⚠ modifications non enregistrées';
+  } else {
+    btn.classList.remove('dirty');
+    btn.textContent = 'Enregistrer';
+    hint.className = '';
+    hint.textContent = '';
+  }
+}
+
+function getFormValues() {
+  return {
+    Heures_INSPE: document.getElementById('f_Heures_INSPE').value.trim(),
+    Heures_LPE:   document.getElementById('f_Heures_LPE').value.trim(),
+    Heures_M2E:   document.getElementById('f_Heures_M2E').value.trim(),
+    Commentaire:  document.getElementById('f_Commentaire').value.trim()
+  };
+}
+
+function numToStr(v) {
+  if (v === null || v === undefined || v === 0) return '';
+  return String(v);
+}
+
+function parseHeures(raw) {
+  if (!raw) return 0;
+  const n = parseFloat(String(raw).replace(',', '.'));
+  return (isNaN(n) || n < 0) ? 0 : n;
+}
+
+async function saveRecord() {
+  const btn = document.getElementById('btn-save');
+  const hint = document.getElementById('save-hint');
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement…';
+
+  try {
+    const values = getFormValues();
+    // On n'envoie jamais Ref_formateur, Login_acad ni exercice_cod : ces
+    // colonnes sont posées par trigger formula côté Grist, jamais par le widget.
+    const payload = {
+      Heures_INSPE: parseHeures(values.Heures_INSPE),
+      Heures_LPE:   parseHeures(values.Heures_LPE),
+      Heures_M2E:   parseHeures(values.Heures_M2E),
+      Commentaire:  values.Commentaire
+    };
+
+    if (sondageRowId !== null) {
+      await grist.docApi.applyUserActions([['UpdateRecord', TABLE_SONDAGE, sondageRowId, payload]]);
+    } else {
+      const result = await grist.docApi.applyUserActions([['AddRecord', TABLE_SONDAGE, null, payload]]);
+      sondageRowId = result.retValues[0];
+    }
+
+    originalValues = values;
+    isDirty = false;
+    btn.classList.remove('dirty');
+    btn.textContent = 'Enregistrer';
+    btn.disabled = false;
+    hint.className = 'ok';
+    hint.textContent = '✓ Enregistré à ' + new Date().toLocaleTimeString('fr-FR');
+    setTimeout(() => { if (hint.className === 'ok') { hint.className = ''; hint.textContent = ''; } }, 4000);
+
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'Enregistrer';
+    hint.className = 'err';
+    hint.textContent = '❌ Erreur : ' + err.message;
+  }
+}
+</script>
+</body>
+</html>

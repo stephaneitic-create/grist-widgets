@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Décisions partagées, prototype</title>
+<style>
+  :root {
+    --encre: #1c2a35;
+    --encre-douce: #51626f;
+    --fond: #ffffff;
+    --fond-carte: #f6f8fa;
+    --trait: #d3dae0;
+    --accent: #0e6a86;
+    --accent-fonce: #09526a;
+    --ok: #26703f;
+    --attention: #8f5a00;
+    --erreur: #a8261c;
+    --rayon: 6px;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+  body {
+    margin: 0;
+    padding: 14px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--encre);
+    background: var(--fond);
+  }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  h3 { font-size: 14px; margin: 16px 0 6px; }
+  p { margin: 0 0 8px; }
+  .statut { color: var(--encre-douce); margin-bottom: 12px; }
+  .grille { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 760px) { .grille { grid-template-columns: 1fr; } }
+  .carte { background: var(--fond-carte); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 12px; min-width: 0; }
+  .note { color: var(--encre-douce); font-size: 13px; margin: 6px 0 0; }
+  label { display: block; font-weight: 600; margin-bottom: 4px; }
+  input[type="search"] {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--trait); border-radius: var(--rayon);
+    font: inherit; background: #fff; color: inherit;
+  }
+  button { font: inherit; cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: 0.55; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .liste { list-style: none; margin: 8px 0 0; padding: 0; max-height: 340px; overflow-y: auto; border: 1px solid var(--trait); border-radius: var(--rayon); background: #fff; }
+  .liste li + li { border-top: 1px solid var(--trait); }
+  .ligne {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; width: 100%; text-align: left;
+    padding: 8px 10px; border: 0; background: transparent; color: inherit;
+  }
+  .ligne:hover { background: #eef3f6; }
+  .ligne[aria-pressed="true"] { background: #dcebf1; box-shadow: inset 4px 0 0 var(--accent); }
+  .ligne .nom { font-weight: 600; overflow-wrap: anywhere; }
+  .ligne .meta { color: var(--encre-douce); font-size: 12.5px; grid-column: 1; overflow-wrap: anywhere; }
+  .pastille { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--trait); background: #fff; white-space: nowrap; }
+  .pastille.oui { border-color: var(--ok); color: var(--ok); }
+  .pastille.non { border-color: var(--erreur); color: var(--erreur); }
+  .pastille.attente { border-color: var(--attention); color: var(--attention); }
+
+  .cle { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; background: #fff; border: 1px solid var(--trait); border-radius: var(--rayon); padding: 6px 8px; overflow-wrap: anywhere; }
+  .vide { color: var(--encre-douce); }
+  .boutons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .boutons button { flex: 1 1 90px; padding: 9px 12px; border-radius: var(--rayon); border: 1px solid var(--accent); background: #fff; color: var(--accent-fonce); font-weight: 600; }
+  .boutons button:hover:not(:disabled) { background: var(--accent); color: #fff; }
+  .avert, .conflit { border-radius: var(--rayon); padding: 8px 10px; margin: 8px 0; border: 1px solid var(--attention); background: #fff7e8; }
+  .conflit .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .conflit button, .avert button, .outil { padding: 6px 10px; border-radius: var(--rayon); border: 1px solid var(--encre-douce); background: #fff; color: var(--encre); }
+  .alerte { border: 1px solid var(--erreur); background: #fdecea; color: #6d1912; border-radius: var(--rayon); padding: 10px 12px; margin-bottom: 12px; }
+  .alerte ul { margin: 6px 0 0; padding-left: 18px; }
+  .toast { min-height: 1.4em; margin-top: 8px; color: var(--ok); font-weight: 600; }
+  .toast.erreur { color: var(--erreur); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--trait); vertical-align: top; overflow-wrap: anywhere; }
+  th { font-weight: 600; }
+  .defile { overflow-x: auto; }
+  .defile table { min-width: 480px; }
+  th:nth-child(1), td:nth-child(1), th:nth-child(3), td:nth-child(3) { white-space: nowrap; }
+  .verifs { list-style: none; margin: 0; padding: 0; }
+  .verifs li { display: grid; grid-template-columns: 9.5em 1fr; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--trait); }
+  .etat { font-weight: 700; }
+  .etat.ok { color: var(--ok); }
+  .etat.verifier { color: var(--erreur); }
+  .etat.attente { color: var(--attention); }
+  .pied { margin-top: 14px; color: var(--encre-douce); font-size: 12.5px; }
+</style>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+</head>
+<body>
+<main>
+  <h1>Décisions partagées, prototype</h1>
+  <p id="statut" class="statut" role="status">Connexion à Grist en cours.</p>
+  <section id="alerte" class="alerte" hidden></section>
+
+  <div class="grille">
+    <section class="carte" aria-labelledby="t-cand">
+      <h2 id="t-cand">Candidatures</h2>
+      <label for="filtre">Chercher par nom, courriel ou session</label>
+      <input id="filtre" type="search" autocomplete="off">
+      <ul id="liste" class="liste"></ul>
+      <p id="liste-info" class="note"></p>
+    </section>
+
+    <section class="carte" aria-labelledby="t-decision">
+      <h2 id="t-decision">Décision</h2>
+      <p id="decision-vide" class="vide">Choisis une candidature dans la liste.</p>
+      <div id="decision" hidden>
+        <p class="cle" id="d-cle"></p>
+        <p id="d-actuel"></p>
+        <div id="d-changement" class="avert" hidden></div>
+        <div class="boutons" role="group" aria-label="Choisir une décision">
+          <button type="button" data-val="Oui">Oui</button>
+          <button type="button" data-val="Non">Non</button>
+          <button type="button" data-val="En attente">En attente</button>
+        </div>
+        <div id="conflit" class="conflit" hidden></div>
+      </div>
+      <p id="toast" class="toast" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="carte" aria-labelledby="t-journal">
+      <h2 id="t-journal">Journal des écritures</h2>
+      <div class="defile">
+        <table>
+          <thead><tr><th scope="col">Heure</th><th scope="col">Auteur</th><th scope="col">Décision</th><th scope="col">Clé</th></tr></thead>
+          <tbody id="journal"></tbody>
+        </table>
+      </div>
+      <p id="journal-info" class="note"></p>
+    </section>
+
+    <section class="carte" aria-labelledby="t-verif">
+      <h2 id="t-verif">Vérifications du prototype</h2>
+      <ul id="verifs" class="verifs"></ul>
+
+      <h3>Tests propres à l'iframe</h3>
+      <label for="fichier">Charger un fichier local</label>
+      <input id="fichier" type="file" accept=".xlsx,.xls,.csv">
+      <p id="fichier-info" class="note">Aucun fichier choisi.</p>
+      <button id="telecharger" class="outil" type="button">Télécharger un fichier test</button>
+      <p id="telecharger-info" class="note"></p>
+    </section>
+  </div>
+
+  <p class="pied">Version du widget : prototype 0.1. Tables utilisées : Test_etat, Test_journal, Candidatures_enrichies.</p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var T = { etat: 'Test_etat', journal: 'Test_journal', cand: 'Candidatures_enrichies' };
+  var REQUIS = {};
+  REQUIS[T.etat] = ['cle', 'retenu', 'auteur', 'horodatage'];
+  REQUIS[T.journal] = ['cle', 'retenu', 'auteur', 'horodatage'];
+  REQUIS[T.cand] = ['Cle_decision'];
+
+  var etat = [], cand = [], journal = [];
+  var manquants = {};            // table -> message
+  var selection = null;          // { cle, vu }
+  var recu = false;              // onRecords a répondu
+  var dernierDirect = null;      // heure de la dernière mise à jour reçue
+  var occupe = false;
+
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- utilitaires ---------- */
+
+  function lignes(cols) {
+    var ids = cols.id || [];
+    return ids.map(function (_, i) {
+      var r = {};
+      Object.keys(cols).forEach(function (k) { r[k] = cols[k][i]; });
+      return r;
+    });
+  }
+
+  function versDate(v) {
+    if (v === null || v === undefined || v === '') return null;
+    if (v instanceof Date) return v;
+    if (Array.isArray(v) && v[0] === 'D' && typeof v[1] === 'number') return new Date(v[1] * 1000);
+    if (typeof v === 'number') return new Date(v * 1000);
+    var d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function fmtDate(v) {
+    var d = versDate(v);
+    if (!d) return 'vide';
+    return d.toLocaleString('fr-FR', {
+      timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function texte(v) { return (v === null || v === undefined) ? '' : String(v); }
+
+  function creer(tag, classe, contenu) {
+    var e = document.createElement(tag);
+    if (classe) e.className = classe;
+    if (contenu !== undefined) e.textContent = contenu;
+    return e;
+  }
+
+  function classeDecision(v) {
+    if (v === 'Oui') return 'oui';
+    if (v === 'Non') return 'non';
+    if (v === 'En attente') return 'attente';
+    return '';
+  }
+
+  function etatParCle() {
+    var m = new Map();
+    etat.forEach(function (r) { if (r.cle) m.set(r.cle, r); });
+    return m;
+  }
+
+  function afficherAlerte(titre, liste) {
+    var a = $('alerte');
+    a.textContent = '';
+    a.appendChild(creer('strong', '', titre));
+    if (liste && liste.length) {
+      var ul = creer('ul');
+      liste.forEach(function (t) { ul.appendChild(creer('li', '', t)); });
+      a.appendChild(ul);
+    }
+    a.hidden = false;
+  }
+
+  function masquerAlerte() { $('alerte').hidden = true; }
+
+  function annoncer(message, erreur) {
+    var t = $('toast');
+    t.textContent = message;
+    t.className = 'toast' + (erreur ? ' erreur' : '');
+  }
+
+  /* ---------- chargement ---------- */
+
+  async function lireTable(id) {
+    try {
+      var cols = await grist.docApi.fetchTable(id);
+      var absentes = REQUIS[id].filter(function (c) { return !(c in cols); });
+      if (absentes.length) {
+        manquants[id] = 'Table ' + id + ' : colonne(s) introuvable(s) (' + absentes.join(', ') + '). Crée-les puis recharge le widget.';
+      } else {
+        delete manquants[id];
+      }
+      return lignes(cols);
+    } catch (e) {
+      manquants[id] = 'Table ' + id + ' introuvable, ou accès refusé. Vérifie son nom et que le widget a l\'accès complet au document.';
+      return [];
+    }
+  }
+
+  async function chargerCandidatures() { cand = await lireTable(T.cand); }
+  async function chargerEtat() { etat = await lireTable(T.etat); }
+  async function chargerJournal() { journal = await lireTable(T.journal); }
+
+  async function chargerTout() {
+    await Promise.all([chargerCandidatures(), chargerJournal(), recu ? Promise.resolve() : chargerEtat()]);
+    $('statut').textContent = 'Connecté à Grist. ' + cand.length + ' candidature(s) lue(s).';
+    dessiner();
+  }
+
+  /* ---------- affichage ---------- */
+
+  function dessinerListe() {
+    var ul = $('liste');
+    ul.textContent = '';
+    var q = $('filtre').value.trim().toLowerCase();
+    var parCle = etatParCle();
+    var visibles = cand.filter(function (r) {
+      if (!r.Cle_decision) return false;
+      if (!q) return true;
+      return (texte(r.Cle_decision) + ' ' + texte(r.Nom)).toLowerCase().indexOf(q) !== -1;
+    });
+    visibles.slice(0, 40).forEach(function (r) {
+      var cle = r.Cle_decision;
+      var dec = parCle.get(cle);
+      var li = creer('li');
+      var b = creer('button', 'ligne');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', selection && selection.cle === cle ? 'true' : 'false');
+      b.appendChild(creer('span', 'nom', texte(r.Nom) || '(sans nom)'));
+      var meta = [];
+      if (r.Offreur) meta.push('offreur ' + r.Offreur);
+      if (r.Session_identifiant) meta.push('session ' + r.Session_identifiant);
+      b.appendChild(creer('span', 'meta', meta.join(', ')));
+      var valeur = dec && dec.retenu ? dec.retenu : 'Aucune décision';
+      b.appendChild(creer('span', 'pastille ' + (dec ? classeDecision(dec.retenu) : ''), valeur));
+      b.addEventListener('click', function () { choisir(cle); });
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+    var total = cand.filter(function (r) { return r.Cle_decision; }).length;
+    $('liste-info').textContent = visibles.length > 40
+      ? '40 premières lignes sur ' + visibles.length + ' correspondantes. Affine la recherche pour voir les autres.'
+      : visibles.length + ' ligne(s) affichée(s) sur ' + total + '.';
+  }
+
+  function dessinerDecision() {
+    var vide = $('decision-vide'), bloc = $('decision');
+    if (!selection) { vide.hidden = false; bloc.hidden = true; return; }
+    vide.hidden = true; bloc.hidden = false;
+    var cur = etatParCle().get(selection.cle) || null;
+    $('d-cle').textContent = selection.cle;
+    $('d-actuel').textContent = cur && cur.retenu
+      ? 'Décision actuelle : ' + cur.retenu + ', par ' + (texte(cur.auteur) || 'auteur inconnu') + ', le ' + fmtDate(cur.horodatage) + '.'
+      : 'Aucune décision enregistrée pour cette candidature.';
+
+    var ch = $('d-changement');
+    var vuAvant = selection.vu;
+    var maintenant = cur && cur.retenu ? cur.retenu : null;
+    if (maintenant !== vuAvant) {
+      ch.textContent = '';
+      ch.appendChild(creer('p', '', 'Cette ligne a changé depuis que tu l\'as ouverte : ' + (maintenant || 'décision retirée') + ' par ' + (cur ? (texte(cur.auteur) || 'auteur inconnu') : 'quelqu\'un') + '.'));
+      var ok = creer('button', '', 'Prendre en compte');
+      ok.type = 'button';
+      ok.addEventListener('click', function () { selection.vu = maintenant; dessinerDecision(); });
+      ch.appendChild(ok);
+      ch.hidden = false;
+    } else {
+      ch.hidden = true;
+    }
+    Array.prototype.forEach.call(bloc.querySelectorAll('.boutons button'), function (b) {
+      b.disabled = occupe || Object.keys(manquants).length > 0;
+    });
+  }
+
+  function dessinerJournal() {
+    var tb = $('journal');
+    tb.textContent = '';
+    var rec = journal.slice().sort(function (a, b) { return b.id - a.id; }).slice(0, 8);
+    rec.forEach(function (r) {
+      var tr = creer('tr');
+      tr.appendChild(creer('td', '', fmtDate(r.horodatage)));
+      tr.appendChild(creer('td', '', texte(r.auteur) || 'vide'));
+      tr.appendChild(creer('td', '', texte(r.retenu)));
+      tr.appendChild(creer('td', '', texte(r.cle)));
+      tb.appendChild(tr);
+    });
+    $('journal-info').textContent = journal.length
+      ? journal.length + ' entrée(s) au total, les 8 plus récentes sont affichées.'
+      : 'Le journal est vide. Il se remplit à chaque décision enregistrée.';
+  }
+
+  function ajouterVerif(ul, nom, statut, detail) {
+    var li = creer('li');
+    var cls = statut === 'OK' ? 'ok' : (statut === 'À vérifier' ? 'verifier' : 'attente');
+    li.appendChild(creer('span', '', nom));
+    var d = creer('span');
+    d.appendChild(creer('span', 'etat ' + cls, statut));
+    d.appendChild(document.createTextNode(detail ? ' : ' + detail : ''));
+    li.appendChild(d);
+    ul.appendChild(li);
+  }
+
+  function dessinerVerifs() {
+    var ul = $('verifs');
+    ul.textContent = '';
+    var msgs = Object.keys(manquants);
+    ajouterVerif(ul, 'Tables et colonnes', msgs.length ? 'À vérifier' : 'OK',
+      msgs.length ? msgs.length + ' table(s) à corriger (voir l\'encadré rouge)' : 'toutes présentes');
+
+    ajouterVerif(ul, 'Mise à jour en direct', recu ? 'OK' : 'À vérifier',
+      recu ? 'dernière réception à ' + dernierDirect.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris' })
+           : 'aucune donnée reçue de la source du widget (la source doit être Test_etat)');
+
+    var dernier = etat.filter(function (r) { return r.retenu; }).sort(function (a, b) { return b.id - a.id; })[0];
+    if (!dernier) {
+      ajouterVerif(ul, 'Auteur renseigné', 'Pas encore testé', 'enregistre une première décision');
+      ajouterVerif(ul, 'Horodatage renseigné', 'Pas encore testé', 'enregistre une première décision');
+    } else {
+      ajouterVerif(ul, 'Auteur renseigné', texte(dernier.auteur) ? 'OK' : 'À vérifier',
+        texte(dernier.auteur) ? texte(dernier.auteur) : 'la formule déclencheur n\'a rien écrit');
+      ajouterVerif(ul, 'Horodatage renseigné', versDate(dernier.horodatage) ? 'OK' : 'À vérifier',
+        versDate(dernier.horodatage) ? fmtDate(dernier.horodatage) : 'la formule déclencheur n\'a rien écrit');
+    }
+
+    if (!etat.length) ajouterVerif(ul, 'Journal complet', 'Pas encore testé', '');
+    else ajouterVerif(ul, 'Journal complet', journal.length >= etat.length ? 'OK' : 'À vérifier',
+      journal.length + ' entrée(s) de journal pour ' + etat.length + ' ligne(s) d\'état');
+  }
+
+  function dessiner() {
+    var msgs = Object.keys(manquants).map(function (k) { return manquants[k]; });
+    if (msgs.length) afficherAlerte('Le prototype ne peut pas fonctionner tant que la structure n\'est pas complète.', msgs);
+    else masquerAlerte();
+    dessinerListe();
+    dessinerDecision();
+    dessinerJournal();
+    dessinerVerifs();
+  }
+
+  /* ---------- sélection et écriture ---------- */
+
+  function choisir(cle) {
+    var cur = etatParCle().get(cle) || null;
+    selection = { cle: cle, vu: cur && cur.retenu ? cur.retenu : null };
+    $('conflit').hidden = true;
+    annoncer('');
+    dessiner();
+  }
+
+  function montrerConflit(courant, voulu) {
+    var c = $('conflit');
+    c.textContent = '';
+    var qui = courant ? (texte(courant.auteur) || 'quelqu\'un') : 'quelqu\'un';
+    var quand = courant ? fmtDate(courant.horodatage) : '';
+    c.appendChild(creer('p', '', 'Cette ligne a été modifiée par ' + qui + (quand ? ' (' + quand + ')' : '') + ' depuis que tu l\'as ouverte. Valeur actuelle : ' + (courant && courant.retenu ? courant.retenu : 'aucune') + '.'));
+    var actions = creer('div', 'actions');
+    var remplacer = creer('button', '', 'Remplacer par ' + voulu);
+    remplacer.type = 'button';
+    remplacer.addEventListener('click', function () { c.hidden = true; decider(voulu, true); });
+    var garder = creer('button', '', 'Garder la valeur actuelle');
+    garder.type = 'button';
+    garder.addEventListener('click', function () {
+      selection.vu = courant && courant.retenu ? courant.retenu : null;
+      c.hidden = true;
+      dessiner();
+    });
+    actions.appendChild(remplacer);
+    actions.appendChild(garder);
+    c.appendChild(actions);
+    c.hidden = false;
+  }
+
+  async function decider(valeur, forcer) {
+    if (!selection || occupe) return;
+    occupe = true; dessinerDecision(); annoncer('');
+    try {
+      var fraiches = await lireTable(T.etat);
+      if (Object.keys(manquants).length) {
+        annoncer('Écriture annulée : la structure des tables est incomplète (voir l\'encadré rouge).', true);
+        return;
+      }
+      var cur = null;
+      for (var i = 0; i < fraiches.length; i++) if (fraiches[i].cle === selection.cle) { cur = fraiches[i]; break; }
+      var valeurCourante = cur && cur.retenu ? cur.retenu : null;
+
+      if (!forcer && valeurCourante !== selection.vu) {
+        montrerConflit(cur, valeur);
+        return;
+      }
+      if (valeurCourante === valeur) {
+        selection.vu = valeur;
+        annoncer('Cette décision est déjà enregistrée, rien à écrire.');
+        return;
+      }
+
+      var actions = [];
+      if (cur) actions.push(['UpdateRecord', T.etat, cur.id, { retenu: valeur }]);
+      else actions.push(['AddRecord', T.etat, null, { cle: selection.cle, retenu: valeur }]);
+      actions.push(['AddRecord', T.journal, null, { cle: selection.cle, retenu: valeur }]);
+      await grist.docApi.applyUserActions(actions);
+
+      selection.vu = valeur;
+      await Promise.all([chargerEtatSiBesoin(), chargerJournal()]);
+      annoncer('Décision « ' + valeur + ' » enregistrée.');
+    } catch (e) {
+      annoncer('Écriture refusée : ' + (e && e.message ? e.message : e) + '. Vérifie tes droits d\'édition sur la copie.', true);
+    } finally {
+      occupe = false;
+      dessiner();
+    }
+  }
+
+  async function chargerEtatSiBesoin() { if (!recu) await chargerEtat(); }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.boutons button'), function (b) {
+    b.addEventListener('click', function () { decider(b.getAttribute('data-val'), false); });
+  });
+  $('filtre').addEventListener('input', dessinerListe);
+
+  /* ---------- tests propres à l'iframe ---------- */
+
+  $('fichier').addEventListener('change', function (ev) {
+    var f = ev.target.files && ev.target.files[0];
+    var info = $('fichier-info');
+    if (!f) { info.textContent = 'Aucun fichier choisi.'; return; }
+    var lecteur = new FileReader();
+    lecteur.onload = function () {
+      info.textContent = 'Fichier lu avec succès : ' + f.name + ', ' + lecteur.result.byteLength + ' octet(s).';
+    };
+    lecteur.onerror = function () {
+      info.textContent = 'Lecture impossible depuis le widget. Note-le : le chargement des extractions devra passer par une autre voie.';
+    };
+    lecteur.readAsArrayBuffer(f);
+  });
+
+  $('telecharger').addEventListener('click', function () {
+    var info = $('telecharger-info');
+    try {
+      var blob = new Blob(['\ufeffcolonne;valeur\r\ntest;ok\r\n'], { type: 'text/csv;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = 'test_export_widget.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      info.textContent = 'Si ton navigateur a proposé d\'enregistrer test_export_widget.csv, le téléchargement fonctionne depuis le widget. Sinon, note-le : l\'export de secours devra passer par une autre voie.';
+    } catch (e) {
+      info.textContent = 'Téléchargement bloqué : ' + (e && e.message ? e.message : e) + '.';
+    }
+  });
+
+  /* ---------- démarrage ---------- */
+
+  function demarrer() {
+    if (!window.grist) {
+      $('statut').textContent = 'Hors Grist.';
+      afficherAlerte('Ce widget doit être ouvert dans Grist.', [
+        'Ajoute-le à une page du document de test comme widget personnalisé, avec l\'accès complet au document.',
+        'Si tu es bien dans Grist, le script de l\'API n\'a pas pu se charger : vérifie l\'accès à docs.getgrist.com depuis ce poste.'
+      ]);
+      return;
+    }
+    grist.ready({ requiredAccess: 'full' });
+    grist.onRecords(function (recs) {
+      recu = true;
+      dernierDirect = new Date();
+      etat = recs;
+      chargerJournal().then(dessiner);
+    });
+    chargerTout().catch(function (e) {
+      afficherAlerte('Chargement impossible.', [String(e && e.message ? e.message : e)]);
+    });
+  }
+
+  demarrer();
+})();
+</script>
+</body>
+</html>

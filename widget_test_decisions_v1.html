@@ -147,7 +147,7 @@
     </section>
   </div>
 
-  <p class="pied">Version du widget : prototype 0.2. Tables utilisées : Test_etat, Test_journal, Candidatures_enrichies.</p>
+  <p class="pied">Version du widget : prototype 0.3. Tables utilisées : Test_etat, Test_journal, Candidatures_enrichies.</p>
 </main>
 
 <script>
@@ -461,7 +461,7 @@
       await grist.docApi.applyUserActions(actions);
 
       selection.vu = valeur;
-      await Promise.all([chargerEtatSiBesoin(), chargerJournal()]);
+      await Promise.all([chargerEtat(), chargerJournal()]);   // relecture immédiate : on n'attend pas la mise à jour en direct
       annoncer('Décision « ' + valeur + ' » enregistrée.');
     } catch (e) {
       annoncer('Écriture refusée : ' + (e && e.message ? e.message : e) + '. Vérifie tes droits d\'édition sur la copie.', true);
@@ -470,8 +470,6 @@
       dessiner();
     }
   }
-
-  async function chargerEtatSiBesoin() { if (!recu) await chargerEtat(); }
 
   Array.prototype.forEach.call(document.querySelectorAll('.boutons button'), function (b) {
     b.addEventListener('click', function () { decider(b.getAttribute('data-val'), false); });

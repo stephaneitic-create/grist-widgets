@@ -139,7 +139,7 @@
       <ul id="verifs" class="verifs"></ul>
 
       <h3>Tests propres à l'iframe</h3>
-      <label for="fichier">Charger un fichier local</label>
+      <label for="fichier">Charger un fichier Excel ou CSV local</label>
       <input id="fichier" type="file" accept=".xlsx,.xls,.csv">
       <p id="fichier-info" class="note">Aucun fichier choisi.</p>
       <button id="telecharger" class="outil" type="button">Télécharger un fichier test</button>
@@ -147,7 +147,7 @@
     </section>
   </div>
 
-  <p class="pied">Version du widget : prototype 0.1. Tables utilisées : Test_etat, Test_journal, Candidatures_enrichies.</p>
+  <p class="pied">Version du widget : prototype 0.2. Tables utilisées : Test_etat, Test_journal, Candidatures_enrichies.</p>
 </main>
 
 <script>
@@ -480,13 +480,46 @@
 
   /* ---------- tests propres à l'iframe ---------- */
 
+  var URL_SHEETJS = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+
+  function chargerSheetJS() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    return new Promise(function (ok, ko) {
+      var sc = document.createElement('script');
+      sc.src = URL_SHEETJS;
+      sc.onload = function () { window.XLSX ? ok(window.XLSX) : ko(new Error('bibliothèque chargée mais inutilisable')); };
+      sc.onerror = function () { ko(new Error('chargement bloqué')); };
+      document.head.appendChild(sc);
+    });
+  }
+
+  function resumerClasseur(XLSX, buffer) {
+    var t0 = performance.now();
+    var wb = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
+    var feuilles = wb.SheetNames.map(function (nom) {
+      var ref = wb.Sheets[nom]['!ref'];
+      var n = ref ? XLSX.utils.decode_range(ref).e.r + 1 : 0;
+      return nom + ' (' + n + ' ligne' + (n > 1 ? 's' : '') + ')';
+    });
+    return { ms: Math.round(performance.now() - t0), feuilles: feuilles };
+  }
+
   $('fichier').addEventListener('change', function (ev) {
     var f = ev.target.files && ev.target.files[0];
     var info = $('fichier-info');
     if (!f) { info.textContent = 'Aucun fichier choisi.'; return; }
+    info.textContent = 'Lecture de ' + f.name + ' en cours.';
     var lecteur = new FileReader();
     lecteur.onload = function () {
-      info.textContent = 'Fichier lu avec succès : ' + f.name + ', ' + lecteur.result.byteLength + ' octet(s).';
+      var octets = lecteur.result.byteLength;
+      var base = 'Fichier lu : ' + f.name + ', ' + octets + ' octet(s). ';
+      info.textContent = base + 'Analyse en cours.';
+      chargerSheetJS().then(function (XLSX) {
+        var r = resumerClasseur(XLSX, lecteur.result);
+        info.textContent = base + 'Analysé en ' + r.ms + ' ms : ' + r.feuilles.join(', ') + '.';
+      }).catch(function (e) {
+        info.textContent = base + 'Il n\'a pas pu être analysé (' + (e && e.message ? e.message : e) + '). Note-le : si la bibliothèque Excel ne se charge pas depuis le widget, le Vérificateur devra l\'embarquer dans son propre fichier.';
+      });
     };
     lecteur.onerror = function () {
       info.textContent = 'Lecture impossible depuis le widget. Note-le : le chargement des extractions devra passer par une autre voie.';

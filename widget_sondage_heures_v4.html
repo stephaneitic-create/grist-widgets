@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sondage heures INSPE / LPE / M2E, EAFC Créteil</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+/* ─── Identité visuelle EAFC ──────────────────────────────────────────────
+   Marine   #292779  — couleur institutionnelle principale
+   Bleu clair #adc3e6 — teinte secondaire, fonds discrets
+   Jaune    #ffcc00  — accent unique (soulignement du titre, focus)
+   Rose     #e57eb0  — signalétique "déjà répondu / à corriger"
+   Crème    #fff7e5  — fond de page
+   Sarcelle #6bbdbf  — action principale (bouton Enregistrer)
+   ────────────────────────────────────────────────────────────────────── */
+:root {
+  --marine:  #292779;
+  --bleu:    #adc3e6;
+  --jaune:   #ffcc00;
+  --rose:    #e57eb0;
+  --creme:   #fff7e5;
+  --sarcelle:#6bbdbf;
+  --gris-txt:#3a3a3a;
+  --font: 'Calibri', 'Segoe UI', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font); font-size: 14px; color: var(--gris-txt);
+  background: var(--creme); min-height: 100vh;
+}
+
+#header {
+  background: var(--marine); color: white; padding: 18px 24px 14px;
+  border-bottom: 4px solid var(--jaune);
+}
+#header h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.01em; }
+#header .sub { font-size: 12px; color: var(--bleu); margin-top: 2px; }
+
+#save-warning {
+  background: white; border-bottom: 1px solid var(--bleu);
+  color: var(--marine); padding: 10px 24px; font-size: 12.5px;
+  line-height: 1.5; display: flex; gap: 8px; align-items: flex-start;
+}
+#save-warning strong { color: var(--marine); }
+
+#loading, #error-msg { padding: 60px 24px; text-align: center; color: #666; }
+.spinner {
+  width: 30px; height: 30px; border: 3px solid var(--bleu);
+  border-top-color: var(--marine); border-radius: 50%;
+  animation: spin 0.8s linear infinite; margin: 0 auto 14px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#error-msg { display: none; color: #a03348; }
+#error-msg .contact { font-size: 12.5px; color: #666; margin-top: 10px; }
+
+#app { display: none; max-width: 620px; margin: 0 auto; padding: 20px 20px 90px; }
+
+.identity-bar {
+  background: white; border: 1px solid var(--bleu); border-radius: 6px;
+  padding: 12px 16px; margin-bottom: 18px; font-size: 13.5px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.identity-bar .name { font-weight: 600; color: var(--marine); }
+.identity-bar .exercice { font-size: 12px; color: #777; white-space: nowrap; }
+
+#revisit-banner {
+  background: #fdf1f6; border: 1px solid var(--rose); color: #8a1f47;
+  border-radius: 6px; padding: 12px 16px; margin-bottom: 18px;
+  font-size: 13px; line-height: 1.5; display: none;
+}
+
+.intro-card {
+  background: white; border: 1px solid var(--bleu); border-radius: 6px;
+  padding: 20px 22px; margin-bottom: 20px; font-size: 13.5px; line-height: 1.65;
+  color: var(--gris-txt);
+}
+.intro-card p { margin-bottom: 10px; }
+.intro-card p:last-child { margin-bottom: 0; }
+
+.section {
+  background: white; border: 1px solid var(--bleu); border-radius: 6px;
+  margin-bottom: 18px; overflow: hidden;
+}
+.section-title {
+  background: var(--marine); color: white; font-size: 12.5px; font-weight: 600;
+  padding: 9px 16px; letter-spacing: 0.03em;
+}
+
+.hours-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+.hours-field {
+  padding: 16px; border-right: 1px solid var(--bleu);
+}
+.hours-field:last-child { border-right: none; }
+.hours-field label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--marine);
+  margin-bottom: 8px;
+}
+.hours-field input[type=text] {
+  width: 100%; border: 1px solid var(--bleu); border-radius: 4px;
+  padding: 8px 10px; font-family: var(--font); font-size: 16px;
+  text-align: center; color: var(--marine); font-weight: 600;
+}
+.hours-field input[type=text]:focus {
+  outline: none; border-color: var(--jaune);
+  box-shadow: 0 0 0 2px rgba(255,204,0,0.35);
+}
+
+.comment-field { padding: 16px; }
+.comment-field label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--marine);
+  margin-bottom: 8px;
+}
+.comment-field textarea {
+  width: 100%; min-height: 64px; resize: vertical;
+  border: 1px solid var(--bleu); border-radius: 4px;
+  padding: 8px 10px; font-family: var(--font); font-size: 13px; color: var(--gris-txt);
+}
+.comment-field textarea:focus {
+  outline: none; border-color: var(--jaune);
+  box-shadow: 0 0 0 2px rgba(255,204,0,0.35);
+}
+
+.hours-field input[type=text].invalid { border-color: #a03348; background: #fdf1f4; }
+#form-error { display: none; padding: 0 16px 14px; color: #a03348; font-size: 12.5px; font-weight: 600; }
+#tech-ref { text-align: center; font-size: 11px; color: #9a9a9a; margin-top: 4px; }
+#save-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; background: white;
+  border-top: 2px solid var(--bleu); padding: 12px 20px;
+  display: none; align-items: center; justify-content: space-between; gap: 12px; z-index: 50;
+}
+#save-bar.visible { display: flex; }
+#save-hint { font-size: 12px; color: #888; }
+#btn-save {
+  background: var(--sarcelle); color: white; border: none; border-radius: 5px;
+  padding: 11px 30px; font-family: var(--font); font-size: 14px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: background 0.15s;
+}
+#btn-save:hover { background: #4f9d9e; }
+#btn-save.dirty { background: var(--rose); }
+#btn-save.dirty:hover { background: #cc5f8f; }
+#btn-save:disabled { background: #aaa; cursor: not-allowed; }
+#save-hint.ok { color: #1a6b3a; font-weight: 600; }
+#save-hint.err { color: #a03348; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>École académique de la formation continue de Créteil</h1>
+  <div class="sub">Sondage des heures INSPE / LPE / M2E</div>
+</div>
+
+<div id="save-warning">
+  <span>⚠️</span>
+  <span><strong>Important :</strong> ce formulaire ne s'enregistre pas automatiquement. Merci de cliquer sur le bouton <strong>Enregistrer</strong> en bas de page avant de quitter cette fenêtre, sans quoi votre saisie sera perdue.</span>
+</div>
+
+<div id="loading"><div class="spinner"></div>Chargement de votre profil…</div>
+<div id="error-msg">
+  <div>Nous n'avons pas retrouvé votre fiche formateur déchargé pour l'exercice en cours.</div>
+  <div class="contact">Merci de contacter le service EAFC (ce.eafc@ac-creteil.fr) si vous pensez qu'il s'agit d'une erreur.</div>
+</div>
+
+<div id="app">
+
+  <div class="identity-bar">
+    <span class="name" id="identity-name">…</span>
+    <span class="exercice" id="identity-exercice">…</span>
+  </div>
+
+  <div id="revisit-banner"></div>
+
+  <div class="intro-card">
+    <p>Madame, Monsieur,</p>
+    <p>Vous êtes formatrice ou formateur déchargé(e) pour l'EAFC.<br>
+    Si votre décharge inclut des heures de formation à l'INSPE ou en LPE ou en M2E, nous vous prions de bien vouloir renseigner le total des heures que vous assurerez dans ces structures.<br>
+    En effet, ces formations n'étant pas codées dans SOFIA-FMO, l'EAFC ne pourra pas les décompter de manière automatisée.<br>
+    Merci de bien vouloir uniquement renseigner les heures en chiffres. Par exemple, pour 12 heures, entrez simplement "12".</p>
+    <p>L'EAFC vous remercie pour votre engagement au service de la formation des personnels de l'académie de Créteil.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Heures prévisionnelles par dispositif</div>
+    <div class="hours-grid">
+      <div class="hours-field">
+        <label>INSPE</label>
+        <input type="text" inputmode="decimal" id="f_Heures_INSPE" placeholder="0">
+      </div>
+      <div class="hours-field">
+        <label>LPE</label>
+        <input type="text" inputmode="decimal" id="f_Heures_LPE" placeholder="0">
+      </div>
+      <div class="hours-field">
+        <label>M2E</label>
+        <input type="text" inputmode="decimal" id="f_Heures_M2E" placeholder="0">
+      </div>
+    </div>
+    <div id="form-error"></div>
+    <div class="comment-field">
+      <label>Commentaire (facultatif)</label>
+      <textarea id="f_Commentaire" placeholder="Précision utile sur votre saisie…"></textarea>
+    </div>
+  </div>
+
+  <div id="tech-ref"></div>
+
+</div><!-- /app -->
+
+<div id="save-bar">
+  <span id="save-hint"></span>
+  <button id="btn-save" onclick="saveRecord()">Enregistrer</button>
+</div>
+
+<script>
+/* ────────────────────────────────────────────────────────────────────────
+   Widget Sondage heures INSPE / LPE / M2E, version 4
+
+   Changements par rapport à la v3 :
+   1. La ligne Sondage retrouvée est rattachée à l'identité du formateur
+      (Ref_formateur ou Login_acad), et non plus "la première ligne de
+      l'exercice". On ne dépend plus uniquement de la RLS pour ne pas
+      afficher ni écraser la ligne d'un autre.
+   2. Après chaque écriture, relecture de la table et comparaison : le
+      message de succès n'apparaît que si la donnée est réellement là,
+      rattachée à la bonne fiche.
+   3. Validation stricte des heures (plus de conversion silencieuse en 0).
+   4. Alerte du navigateur si on quitte la page avec des modifications
+      non enregistrées.
+   5. Traces dans la console ([sondage v4]) et référence technique
+      discrète en bas de page, utile quand un formateur signale un souci.
+   Colonnes attendues :
+   - Formateurs_decharges : exercice_cod, Est_exercice_courant, Civ_Nom_Prenom,
+                            Mail_acad_normalise_lower
+   - Sondage : Ref_formateur, Login_acad, exercice_cod, Heures_INSPE,
+               Heures_LPE, Heures_M2E, Commentaire, Date_maj (facultative)
+   ──────────────────────────────────────────────────────────────────────── */
+const VERSION = 'v4';
+const TABLE_FORMATEURS = 'Formateurs_decharges';
+const TABLE_SONDAGE    = 'Sondage';
+const HOURS = ['Heures_INSPE', 'Heures_LPE', 'Heures_M2E'];
+
+let identity       = null;   // { rowId, civNomPrenom, exerciceCod, mailLower }
+let sondageRowId   = null;   // null = pas encore de ligne Sondage pour cet exercice
+let originalValues = { Heures_INSPE: '', Heures_LPE: '', Heures_M2E: '', Commentaire: '' };
+let isDirty        = false;
+let isSaving       = false;
+
+function log() {
+  const a = Array.prototype.slice.call(arguments);
+  a.unshift('[sondage ' + VERSION + ']');
+  console.log.apply(console, a);
+}
+const norm = v => String(v === null || v === undefined ? '' : v).trim();
+
+grist.ready({ requiredAccess: 'full' });
+window.addEventListener('load', init);
+window.addEventListener('beforeunload', function (e) {
+  if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+async function init() {
+  try {
+    // 1. Identité : la RLS de Formateurs_decharges limite la lecture à la
+    //    fiche du formateur connecté (ou "vu en tant que").
+    const formateurs = await grist.docApi.fetchTable(TABLE_FORMATEURS);
+
+    const activeRows = [];
+    if (formateurs && formateurs.id) {
+      for (let i = 0; i < formateurs.id.length; i++) {
+        if (formateurs.Est_exercice_courant && formateurs.Est_exercice_courant[i]) activeRows.push(i);
+      }
+    }
+    log('fiches visibles :', formateurs && formateurs.id ? formateurs.id.length : 0, '| actives (exercice courant) :', activeRows.length);
+
+    if (activeRows.length === 0) { showError(); return; }
+    if (activeRows.length > 1) {
+      showError('Votre fiche apparaît plusieurs fois pour l\'exercice en cours. Merci de contacter le service EAFC.',
+        'Détail technique : ' + activeRows.length + ' fiches visibles. Si vous êtes propriétaire du document, '
+        + 'utilisez « Afficher en tant que » plutôt que votre propre compte.');
+      return;
+    }
+    const idx = activeRows[0];
+    identity = {
+      rowId:        formateurs.id[idx],
+      civNomPrenom: (formateurs.Civ_Nom_Prenom && formateurs.Civ_Nom_Prenom[idx]) || '…',
+      exerciceCod:  norm(formateurs.exercice_cod && formateurs.exercice_cod[idx]),
+      mailLower:    norm(formateurs.Mail_acad_normalise_lower && formateurs.Mail_acad_normalise_lower[idx]).toLowerCase()
+    };
+    document.getElementById('identity-name').textContent = identity.civNomPrenom;
+    document.getElementById('identity-exercice').textContent = 'Exercice ' + identity.exerciceCod;
+    log('identité :', identity);
+
+    // 2. Ligne Sondage éventuelle : rattachée à CE formateur, pour CET exercice.
+    const sondage = await grist.docApi.fetchTable(TABLE_SONDAGE);
+    const found = findOwnRow(sondage);
+    if (found.index >= 0) {
+      const i = found.index;
+      sondageRowId = sondage.id[i];
+      originalValues = rowToValues(sondage, i);
+      showRevisitBanner(sondage.Date_maj ? sondage.Date_maj[i] : null);
+    }
+    fillForm(originalValues);
+    attachListeners();
+    updateTechRef();
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('save-bar').classList.add('visible');
+  } catch (err) {
+    log('erreur init', err);
+    showError('Erreur technique : ' + err.message);
+  }
+}
+
+// Cherche la ligne Sondage du formateur identifié pour l'exercice courant.
+function findOwnRow(sondage) {
+  const res = { index: -1, visible: 0, own: 0 };
+  if (!sondage || !sondage.id) return res;
+  const ownAnyExercice = [];
+  const ownThisExercice = [];
+  for (let i = 0; i < sondage.id.length; i++) {
+    res.visible++;
+    const refOk   = sondage.Ref_formateur && sondage.Ref_formateur[i] === identity.rowId;
+    const loginOk = identity.mailLower && sondage.Login_acad
+                    && norm(sondage.Login_acad[i]).toLowerCase() === identity.mailLower;
+    if (!(refOk || loginOk)) continue;
+    ownAnyExercice.push(i);
+    if (norm(sondage.exercice_cod && sondage.exercice_cod[i]) === identity.exerciceCod) ownThisExercice.push(i);
+  }
+  res.own = ownThisExercice.length;
+  log('lignes Sondage visibles :', res.visible, '| à moi (tous exercices) :', ownAnyExercice.length, '| à moi (exercice ' + identity.exerciceCod + ') :', ownThisExercice.length);
+  if (ownAnyExercice.length && !ownThisExercice.length) {
+    log('ATTENTION : lignes à moi mais exercice_cod différent :',
+        ownAnyExercice.map(i => norm(sondage.exercice_cod && sondage.exercice_cod[i])));
+  }
+  if (res.visible > ownAnyExercice.length) {
+    log('NB : la table Sondage expose des lignes d\'autres personnes à ce compte (ignorées par le widget).');
+  }
+  if (ownThisExercice.length > 1) log('ATTENTION : doublons pour cet exercice, on prend la plus récente.');
+  if (ownThisExercice.length) {
+    // la plus récente = id le plus élevé
+    res.index = ownThisExercice.reduce((best, i) => (sondage.id[i] > sondage.id[best] ? i : best), ownThisExercice[0]);
+  }
+  return res;
+}
+
+function rowToValues(t, i) {
+  return {
+    Heures_INSPE: numToStr(t.Heures_INSPE ? t.Heures_INSPE[i] : 0),
+    Heures_LPE:   numToStr(t.Heures_LPE   ? t.Heures_LPE[i]   : 0),
+    Heures_M2E:   numToStr(t.Heures_M2E   ? t.Heures_M2E[i]   : 0),
+    Commentaire:  norm(t.Commentaire ? t.Commentaire[i] : '')
+  };
+}
+
+function showRevisitBanner(dateMaj) {
+  const el = document.getElementById('revisit-banner');
+  const dateTxt = dateMaj ? new Date(dateMaj * 1000).toLocaleDateString('fr-FR') : null;
+  el.innerHTML = '✏️ Vous avez déjà renseigné vos heures pour cet exercice'
+    + (dateTxt ? ' (dernière mise à jour le ' + dateTxt + ')' : '')
+    + '. Vous pouvez corriger les valeurs ci-dessous puis cliquer sur <strong>Enregistrer</strong> pour les mettre à jour.';
+  el.style.display = 'block';
+}
+
+function showError(msg, detail) {
+  document.getElementById('loading').style.display = 'none';
+  const el = document.getElementById('error-msg');
+  if (msg) el.querySelector('div').textContent = msg;
+  if (detail) {
+    let d = document.getElementById('error-detail');
+    if (!d) { d = document.createElement('div'); d.id = 'error-detail'; d.className = 'contact'; el.appendChild(d); }
+    d.textContent = detail;
+  }
+  el.style.display = 'block';
+}
+
+function updateTechRef() {
+  const el = document.getElementById('tech-ref');
+  if (!el || !identity) return;
+  el.textContent = 'Référence technique : widget ' + VERSION + ', fiche n° ' + identity.rowId
+    + ', saisie n° ' + (sondageRowId === null ? 'aucune' : sondageRowId);
+}
+
+function fillForm(values) {
+  document.getElementById('f_Heures_INSPE').value = values.Heures_INSPE;
+  document.getElementById('f_Heures_LPE').value   = values.Heures_LPE;
+  document.getElementById('f_Heures_M2E').value   = values.Heures_M2E;
+  document.getElementById('f_Commentaire').value  = values.Commentaire;
+}
+
+function attachListeners() {
+  ['f_Heures_INSPE', 'f_Heures_LPE', 'f_Heures_M2E', 'f_Commentaire'].forEach(id => {
+    document.getElementById(id).addEventListener('input', onFieldChange);
+  });
+}
+
+function onFieldChange() {
+  clearFormError();
+  const current = getFormValues();
+  isDirty = Object.keys(originalValues).some(k => !sameValue(k, current[k], originalValues[k]));
+  updateSaveButton();
+}
+
+function sameValue(key, a, b) {
+  if (HOURS.indexOf(key) >= 0) {
+    const pa = parseHeures(a), pb = parseHeures(b);
+    if (pa.ok && pb.ok) return pa.value === pb.value;
+  }
+  return norm(a) === norm(b);
+}
+
+function updateSaveButton() {
+  const btn = document.getElementById('btn-save');
+  const hint = document.getElementById('save-hint');
+  if (isDirty) {
+    btn.classList.add('dirty');
+    btn.textContent = 'Enregistrer les modifications';
+    hint.className = '';
+    hint.textContent = '⚠ modifications non enregistrées';
+  } else {
+    btn.classList.remove('dirty');
+    btn.textContent = 'Enregistrer';
+    hint.className = '';
+    hint.textContent = '';
+  }
+}
+
+function getFormValues() {
+  return {
+    Heures_INSPE: document.getElementById('f_Heures_INSPE').value.trim(),
+    Heures_LPE:   document.getElementById('f_Heures_LPE').value.trim(),
+    Heures_M2E:   document.getElementById('f_Heures_M2E').value.trim(),
+    Commentaire:  document.getElementById('f_Commentaire').value.trim()
+  };
+}
+
+function numToStr(v) {
+  if (v === null || v === undefined || v === 0 || v === '') return '';
+  return String(v).replace('.', ',');
+}
+
+// Chiffres uniquement : 12, 12,5 ou 12.5. Vide = 0. Tout le reste est refusé.
+function parseHeures(raw) {
+  const s = norm(raw);
+  if (s === '') return { ok: true, value: 0 };
+  if (!/^\d{1,4}([.,]\d{1,2})?$/.test(s)) return { ok: false, value: 0 };
+  return { ok: true, value: parseFloat(s.replace(',', '.')) };
+}
+
+function showFormError(msg, badIds) {
+  const el = document.getElementById('form-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+  (badIds || []).forEach(id => document.getElementById(id).classList.add('invalid'));
+}
+function clearFormError() {
+  document.getElementById('form-error').style.display = 'none';
+  HOURS.forEach(h => document.getElementById('f_' + h).classList.remove('invalid'));
+}
+
+// Relit la table après écriture et vérifie que la donnée y est réellement.
+async function verifyWrite(rowId, expected) {
+  const t = await grist.docApi.fetchTable(TABLE_SONDAGE);
+  const i = t && t.id ? t.id.indexOf(rowId) : -1;
+  if (i < 0) return { ok: false, why: 'la ligne n\'est pas retrouvée dans la table après écriture' };
+  const refOk = t.Ref_formateur && t.Ref_formateur[i] === identity.rowId;
+  if (!refOk) return { ok: false, why: 'la ligne n\'est pas rattachée à votre fiche (Ref_formateur = ' + (t.Ref_formateur ? t.Ref_formateur[i] : '?') + ')' };
+  const stored = rowToValues(t, i);
+  for (const k of Object.keys(expected)) {
+    const exp = HOURS.indexOf(k) >= 0 ? numToStr(expected[k]) : norm(expected[k]);
+    if (!sameValue(k, stored[k], exp)) return { ok: false, why: 'la valeur relue (' + k + ' = "' + stored[k] + '") diffère de la valeur envoyée ("' + exp + '")' };
+  }
+  return { ok: true, stored: stored };
+}
+
+async function saveRecord() {
+  if (isSaving) return;
+  const btn = document.getElementById('btn-save');
+  const hint = document.getElementById('save-hint');
+  clearFormError();
+
+  // 1. Validation avant tout envoi
+  const values = getFormValues();
+  const bad = HOURS.filter(h => !parseHeures(values[h]).ok);
+  if (bad.length) {
+    showFormError('Merci de saisir uniquement des chiffres pour les heures (exemple : 12 ou 12,5).',
+      bad.map(h => 'f_' + h));
+    hint.className = 'err';
+    hint.textContent = '❌ Saisie à corriger, rien n\'a été enregistré';
+    return;
+  }
+  const payload = {
+    Heures_INSPE: parseHeures(values.Heures_INSPE).value,
+    Heures_LPE:   parseHeures(values.Heures_LPE).value,
+    Heures_M2E:   parseHeures(values.Heures_M2E).value,
+    Commentaire:  values.Commentaire
+  };
+
+  isSaving = true;
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement…';
+  hint.className = '';
+  hint.textContent = '';
+
+  try {
+    // On n'envoie jamais Ref_formateur, Login_acad ni exercice_cod : posés par
+    // trigger formula côté Grist.
+    let rowId = sondageRowId;
+    if (rowId !== null) {
+      log('UpdateRecord ligne', rowId, payload);
+      await grist.docApi.applyUserActions([['UpdateRecord', TABLE_SONDAGE, rowId, payload]]);
+    } else {
+      log('AddRecord', payload);
+      const result = await grist.docApi.applyUserActions([['AddRecord', TABLE_SONDAGE, null, payload]]);
+      rowId = result && result.retValues ? result.retValues[0] : null;
+      log('AddRecord retour', rowId);
+      if (rowId === null || rowId === undefined) throw new Error('Grist n\'a pas renvoyé le numéro de la nouvelle ligne.');
+    }
+
+    // 2. Relecture de contrôle
+    const check = await verifyWrite(rowId, payload);
+    if (!check.ok) {
+      log('ÉCHEC de vérification :', check.why);
+      throw new Error('Enregistrement non confirmé : ' + check.why + '. Merci de prévenir le service EAFC (ce.eafc@ac-creteil.fr) en indiquant la référence technique en bas de page.');
+    }
+
+    // 3. Confirmation réelle
+    sondageRowId = rowId;
+    originalValues = check.stored;
+    fillForm(originalValues);
+    isDirty = false;
+    btn.classList.remove('dirty');
+    btn.textContent = 'Enregistrer';
+    hint.className = 'ok';
+    hint.textContent = '✓ Enregistré et vérifié à ' + new Date().toLocaleTimeString('fr-FR');
+    updateTechRef();
+    log('OK ligne', rowId, check.stored);
+    setTimeout(() => { if (hint.className === 'ok') { hint.className = ''; hint.textContent = ''; } }, 6000);
+  } catch (err) {
+    log('erreur save', err);
+    btn.classList.add('dirty');
+    btn.textContent = 'Enregistrer les modifications';
+    hint.className = 'err';
+    hint.textContent = '❌ ' + err.message;
+    updateTechRef();
+  } finally {
+    isSaving = false;
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

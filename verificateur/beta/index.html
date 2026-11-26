@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob: https://grist.numerique.gouv.fr https://docs.getgrist.com; worker-src blob:; child-src blob:; style-src 'unsafe-inline'; img-src data: blob:; connect-src https://grist.numerique.gouv.fr https://docs.getgrist.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vérificateur SOFIA v3.2.0-alpha4 — EAFC Créteil</title>
+<title>Vérificateur SOFIA v3.2.0-alpha5 — EAFC Créteil</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
 <style>
 /* Vérificateur SOFIA v3.1 — feuille de style unique (palette héritée de la v2, polices système, aucune ressource distante) */
@@ -692,7 +692,7 @@ button.stat-tile:hover{border-color:var(--accent)}
 .bk-reason{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bk-meta{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.badge-gel{background:#e8f0f7;color:#1f4e79;font-size:11px;margin-left:6px;cursor:help}.badge-gel.plein{background:var(--ko-light);color:var(--ko)}.badge-gel.inactif{opacity:.6}.grist-line{padding:6px 12px;font-size:12.5px}
+.badge-gel{background:#e8f0f7;color:#1f4e79;font-size:11px;margin-left:6px;cursor:help}.badge-gel.plein{background:var(--ko-light);color:var(--ko)}.badge-gel.inactif{opacity:.6}.grist-line{padding:6px 12px;font-size:12.5px}.badge-gel.hors{background:#eeede8;color:var(--muted)}.badge-gel.dans{background:#e3efe6;color:#2d6a43}.mod-table td.c-dec{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -702,7 +702,7 @@ button.stat-tile:hover{border-color:var(--accent)}
   <div class="banner-wrap" role="img" aria-label="EAFC Créteil — École Académique de la Formation Continue"><div class="banner-left"></div></div>
   <div class="appbar">
     <span class="appbar-title">Vérificateur des candidatures SOFIA</span>
-    <span class="appbar-meta" title="Version 3.2.0-alpha4 du 2026-11-03 · traitement 100 % local, aucune connexion requise">v3.2.0-alpha4 · 100 % local</span>
+    <span class="appbar-meta" title="Version 3.2.0-alpha5 du 2026-11-03 · traitement 100 % local, aucune connexion requise">v3.2.0-alpha5 · 100 % local</span>
   </div>
 </header>
 
@@ -764,7 +764,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
  * Fonctionne dans la page, dans le Web Worker et sous Node (tests) : `globalThis` existe partout. */
 var SV = (function (g) {
   g.SV = g.SV || {};
-  g.SV.VERSION = g.SV.VERSION || '3.2.0-alpha4';
+  g.SV.VERSION = g.SV.VERSION || '3.2.0-alpha5';
   g.SV.MODEL_VERSION = 2; // version du modèle compact stocké en base : incrémenter si sa structure change (2 : colonnes groupe / préinscriptions de « Liste des dispositifs », v3.1.1)
   return g.SV;
 })(globalThis);
@@ -853,6 +853,18 @@ var SV = (function (g) {
   function setLogger(fn) { logger = fn; }
 
   SV.norm = norm; SV.esc = esc; SV.colIdx = colIdx; SV.colLetter = colLetter;
+  /** v3.2.0-alpha5 : « 04/11/2026 16h09 », horodatage des exports de décisions. Grist ne le prend pas pour une date à
+   *  l'import (essai H6 du 26/11) : il ne retourne donc jamais le jour et le mois. Le consolidé lit « : » et « h ». */
+  function stampFRh(d) { return fmtDateFR(d) + ' ' + pad(d.getHours()) + 'h' + pad(d.getMinutes()); }
+  /** v3.2.0-alpha5 : date d'extraction AAAAMMJJ (suivie ou non de _HHhMM) lue dans un nom de fichier ; null si absente. */
+  function dateInName(name) {
+    var m = /(20\d{2})(\d{2})(\d{2})(?:[_-]?(\d{2})h?(\d{2}))?/.exec(String(name || ''));
+    if (!m) return null;
+    var mo = +m[2], dd = +m[3];
+    if (mo < 1 || mo > 12 || dd < 1 || dd > 31) return null;
+    return { t: Date.UTC(+m[1], mo - 1, dd, m[4] ? +m[4] : 0, m[5] ? +m[5] : 0), txt: m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' ' + m[4] + ':' + m[5] : '') };
+  }
+  SV.stampFRh = stampFRh; SV.dateInName = dateInName;
   SV.pad = pad; SV.fmtDateFR = fmtDateFR; SV.fmtTimeFR = fmtTimeFR; SV.stampFR = stampFR; SV.stampFile = stampFile;
   SV.personKey = personKey; SV.decisionKey = decisionKey; SV.isRowEmpty = isRowEmpty;
   SV.num = num; SV.round1 = round1; SV.round2 = round2; SV.str = str;
@@ -1104,6 +1116,9 @@ var SV = (function (g) {
     var rows = sheetRows(wb, SV.SHEETS.F2);
     if (!rows) return { rows: null, sheetNames: wb.SheetNames.slice() };
     var out = [];
+    // v3.2.0-alpha5 : colonnes « Courriel » et « Discipline » repérées par leur en-tête (pas « Courriel établissement »)
+    var iMail = -1, iDisc = -1;
+    (rows[0] || []).forEach(function (h, j) { var n = SV.norm(h); if (iMail < 0 && /^(courriel|mail|e-mail|email|adresse mail)$/.test(n)) iMail = j; if (iDisc < 0 && n === 'discipline') iDisc = j; });
     for (var i = 1; i < rows.length; i++) {
       var row = rows[i];
       if (SV.isRowEmpty(row)) continue;
@@ -1113,7 +1128,8 @@ var SV = (function (g) {
       var affParts = [ci.f2_aff1, ci.f2_aff2, ci.f2_aff3, ci.f2_aff4]
         .map(function (idx) { return idx < 0 ? '' : SV.str(row[idx]).trim(); })
         .filter(function (p) { return p !== ''; });
-      out.push({ nom: nom, prenom: prenom, message: SV.str(row[SV.FIXED.F2_MESSAGE]).trim(), affectation: affParts.join(' ') });
+      out.push({ nom: nom, prenom: prenom, message: SV.str(row[SV.FIXED.F2_MESSAGE]).trim(), affectation: affParts.join(' '),
+        mail: iMail >= 0 ? SV.str(row[iMail]).trim().toLowerCase() : '', disc: iDisc >= 0 ? SV.str(row[iDisc]).trim() : '' });
     }
     return { rows: out, sheetNames: wb.SheetNames.slice(), rawCount: rows.length - 1 };
   }
@@ -1485,7 +1501,7 @@ var SV = (function (g) {
     var seenGroups = {};
     // v3.2 : gel des quotas de la campagne 1 (inactif sans le réglage gelQuotas ; SV.gelActive n'existe que dans la page)
     var G = (typeof SV.gelActive === 'function') ? SV.gelActive() : null;
-    var gp = G && key && G.byPerson[key] ? (SV.gelPerson ? SV.gelPerson(G.byPerson, key, gelIdent(src, idx, (opts && opts.gelRows) || ciRows)) : G.byPerson[key]) : null;
+    var gp = G && key && G.byPerson[key] ? (SV.gelPerson ? SV.gelPerson(G.byPerson, key, (opts && opts.gelId) || gelIdent(src, idx, (opts && opts.gelRows) || ciRows)) : G.byPerson[key]) : null;
     for (var k = 0; k < ciRows.length; k++) {
       var r = ciRows[k];
       var rd = SV.rowDur(src, idx, r);
@@ -1554,7 +1570,14 @@ var SV = (function (g) {
       var h = { convoquees: 0, total: 0, cp50: 0 };
       var homonyme = false;
       if (foundCI && foundCI.length > 0) {
-        var r0 = foundCI[0];
+        // v3.2.0-alpha5 : ligne CI de CE module d'abord (homonymes : la bonne discipline et le bon courriel), sinon la première
+        var rowsMod0 = foundCI.filter(function (rr) { return SV.str(SV.cell(ci, rr, cm.f1_modcode)).trim() === String(modCode).trim(); });
+        // courriel du fichier de préinscription : il départage les homonymes, sur ce module comme ailleurs
+        var f2mail = row.mail ? String(row.mail).trim().toLowerCase() : '';
+        var rowsMail = f2mail ? foundCI.filter(function (rr) { return SV.str(SV.cell(ci, rr, cm.f1_mail)).trim().toLowerCase() === f2mail; }) : [];
+        var rowsModMail = rowsMod0.filter(function (rr) { return rowsMail.indexOf(rr) !== -1; });
+        if (rowsModMail.length) rowsMod0 = rowsModMail;
+        var r0 = rowsMod0.length ? rowsMod0[0] : rowsMail.length ? rowsMail[0] : foundCI[0];
         nomAff = SV.str(SV.cell(ci, r0, cm.f1_nom)) || nom2;
         prenomAff = SV.str(SV.cell(ci, r0, cm.f1_prenom)) || prenom2;
         civ = SV.str(SV.cell(ci, r0, cm.f1_civ));
@@ -1562,15 +1585,21 @@ var SV = (function (g) {
         disc = SV.str(SV.cell(ci, r0, cm.f1_disc));
         etab = SV.str(SV.cell(ci, r0, cm.f1_etab));
         var rowsMod = foundCI.filter(function (rr) { return SV.str(SV.cell(ci, rr, cm.f1_modcode)).trim() === String(modCode).trim(); });
-        hoursOpts.gelRows = rowsMod.length ? rowsMod : null;
+        if (rowsModMail.length) rowsMod = rowsModMail;
+        hoursOpts.gelRows = rowsMod.length ? rowsMod : rowsMail.length ? rowsMail : null;
+        // préinscrit absent du fichier source pour ce module et dont le courriel n'y figure pas : le courriel du fichier fait foi
+        hoursOpts.gelId = (!hoursOpts.gelRows && f2mail) ? { mails: [f2mail], discs: row.disc ? [SV.norm(row.disc)] : [] } : null;
         h = hoursForPerson(src, idx, foundCI, hoursOpts, key);
-        h.gelId = gelIdent(src, idx, hoursOpts.gelRows || foundCI); hoursOpts.gelRows = null;
+        h.gelId = hoursOpts.gelId || gelIdent(src, idx, hoursOpts.gelRows || foundCI); hoursOpts.gelRows = null; hoursOpts.gelId = null;
         var mails = {}; var nMails = 0;
         for (var k = 0; k < foundCI.length; k++) {
           var mk = SV.str(SV.cell(ci, foundCI[k], cm.f1_mail)).trim().toLowerCase();
           if (mk && !mails[mk]) { mails[mk] = true; nMails++; }
         }
         homonyme = nMails > 1;
+        // courriel du fichier de préinscription absent du fichier source : les lignes CI trouvées sont celles d'un homonyme (ou
+        // d'un ancien courriel) ; on affiche le courriel et la discipline du fichier de préinscription, badge « Homonyme ? »
+        if (f2mail && !rowsMail.length) { mail = f2mail; if (row.disc) disc = row.disc; homonyme = true; }
       }
       if (foundGAIA && foundGAIA.length > 0) grade = SV.str(SV.cell(gaia, foundGAIA[0], cm.f1_gaia_grade));
 
@@ -1888,7 +1917,7 @@ var SV = (function (g) {
     var cm = idx.cm, ci = src.ci;
     var now = (opts && opts.now) || new Date();
     var decideur = SV.str(opts && opts.decideur).trim();
-    var horodatage = SV.stampFR(now);
+    var horodatage = SV.stampFRh ? SV.stampFRh(now) : SV.stampFR(now); // v3.2.0-alpha5 : « 04/11/2026 16h09 »
     var KEEP = SV.KEEP;
     function filterRow(row) { return KEEP.map(function (k) { return SV.cell(ci, row, k); }); }
     var outHeaders = KEEP.map(function (k) { return k < ci.headers.length ? ci.headers[k] : ''; }).concat(SV.EXPORT_EXTRA_HEADERS);
@@ -1949,7 +1978,9 @@ var SV = (function (g) {
         if (!d2 || (d2.value !== 'Oui' && d2.value !== 'Non')) return;
         var v = {};
         v[cm.f1_nom] = c.nomAff || c.nom2; v[cm.f1_prenom] = c.prenomAff || c.prenom2; v[cm.f1_civ] = c.civ || ''; v[cm.f1_mail] = c.mail || ''; v[cm.f1_disc] = c.disc || '';
-        v[cm.f1_modcode] = m.code; v[cm.f1_modlib] = m.lib || ''; v[cm.f1_sessid] = m.session || ''; v[cm.f1_dur] = (m.dureeModule === null || m.dureeModule === undefined) ? '' : m.dureeModule;
+        // v3.2.0-alpha5 : même type de cellule que les lignes CI (un nombre si le fichier source donne des nombres)
+        var likeCI = function (val, col) { var smp = rows.length ? SV.cell(ci, rows[0], col) : (ci.rows.length ? SV.cell(ci, ci.rows[0], col) : ''), s = SV.str(val).trim(); return typeof smp === 'number' && /^\d+$/.test(s) ? +s : s; };
+        v[cm.f1_modcode] = likeCI(m.code, cm.f1_modcode); v[cm.f1_modlib] = m.lib || ''; v[cm.f1_sessid] = likeCI(m.session || '', cm.f1_sessid); v[cm.f1_dur] = (m.dureeModule === null || m.dureeModule === undefined) ? '' : m.dureeModule;
         var row = KEEP.map(function (k) { return v[k] === undefined ? '' : v[k]; });
         var lib2 = m.lib || '', off2 = lib2.substring(0, 3);
         var id2 = (c.nomAff || c.nom2) + '|' + (c.prenomAff || c.prenom2) + '|' + m.code + '|' + (m.session || '');
@@ -2217,7 +2248,7 @@ var SV = (function (g) {
         if ((opts.keepExisting || fixed(c)) && v === 'Oui') { r.alreadyOui++; return; }
         if ((opts.keepExisting || fixed(c)) && v === 'Non') { r.alreadyNon++; return; }
         var ok = true;
-        if (c.isPrepaConcours) { r.prepa++; ok = false; }
+        if (c.isPrepaConcours && !isCP50) { r.prepa++; ok = false; } // v3.2.0-alpha5 : un atelier CP50 accepte les Prépa concours (règle du 25/11/2026)
         if (c.isFSTP) { r.fstp++; ok = false; }
         if (ok && opts.excludeNotFound && c.notInAny) { r.notFound++; ok = false; }
         if (ok && !(isCP50 && opts.cp50IgnoreHours) && !(c.totalHeures <= threshold)) { r.overHours++; ok = false; }
@@ -2429,7 +2460,8 @@ var SV = (function (g) {
       list.push(item);
     });
     // Les formations fermées (seuil hors d'atteinte) et les CP50 (jamais fermés) sont exclus du choix de la priorité
-    var known = list.filter(function (i) { return i.known && !i.closed && !i.exempt; }).sort(riskOrder);
+    // v3.2.0-alpha5 (règle du 25/11/2026) : seule une formation dont le seuil n'est pas atteint (inscrits < seuil) peut être prioritaire
+    var known = list.filter(function (i) { return i.known && !i.closed && !i.exempt && i.under; }).sort(riskOrder);
     var priorities = [];
     if (known.length) {
       var best = known[0];
@@ -3379,6 +3411,10 @@ var SV = (function (g) {
   /** « 26/09/2026 14:30 » → ms (null si illisible) ; accepte aussi une date ISO ou un objet Date (cellule Excel). */
   function parseStamp(v) {
     if (v instanceof Date) return isNaN(v.getTime()) ? null : v.getTime();
+    // v3.2.0-alpha5 : horodatage resté en nombre dans Grist (secondes Unix) ou numéro de série Excel (jours depuis 1900)
+    var nv = typeof v === 'number' ? v : (/^\d{9,10}(\.\d+)?$/.test(SV.str(v).trim()) ? parseFloat(SV.str(v)) : NaN);
+    if (isFinite(nv) && nv >= 1e9 && nv < 1e11) return Math.round(nv * 1000);
+    if (typeof v === 'number' && v > 40000 && v < 60000) { var dj = Math.floor(v); return new Date(1899, 11, 30 + dj, 0, 0, Math.round((v - dj) * 86400)).getTime(); }
     var s = SV.str(v).trim();
     if (!s) return null;
     var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2})[:h](\d{2}))?/);
@@ -3551,7 +3587,7 @@ var SV = (function (g) {
  * Fonctionne dans la page, dans le Web Worker et sous Node (tests) : `globalThis` existe partout. */
 var SV = (function (g) {
   g.SV = g.SV || {};
-  g.SV.VERSION = g.SV.VERSION || '3.2.0-alpha4';
+  g.SV.VERSION = g.SV.VERSION || '3.2.0-alpha5';
   g.SV.MODEL_VERSION = 2; // version du modèle compact stocké en base : incrémenter si sa structure change (2 : colonnes groupe / préinscriptions de « Liste des dispositifs », v3.1.1)
   return g.SV;
 })(globalThis);
@@ -3640,6 +3676,18 @@ var SV = (function (g) {
   function setLogger(fn) { logger = fn; }
 
   SV.norm = norm; SV.esc = esc; SV.colIdx = colIdx; SV.colLetter = colLetter;
+  /** v3.2.0-alpha5 : « 04/11/2026 16h09 », horodatage des exports de décisions. Grist ne le prend pas pour une date à
+   *  l'import (essai H6 du 26/11) : il ne retourne donc jamais le jour et le mois. Le consolidé lit « : » et « h ». */
+  function stampFRh(d) { return fmtDateFR(d) + ' ' + pad(d.getHours()) + 'h' + pad(d.getMinutes()); }
+  /** v3.2.0-alpha5 : date d'extraction AAAAMMJJ (suivie ou non de _HHhMM) lue dans un nom de fichier ; null si absente. */
+  function dateInName(name) {
+    var m = /(20\d{2})(\d{2})(\d{2})(?:[_-]?(\d{2})h?(\d{2}))?/.exec(String(name || ''));
+    if (!m) return null;
+    var mo = +m[2], dd = +m[3];
+    if (mo < 1 || mo > 12 || dd < 1 || dd > 31) return null;
+    return { t: Date.UTC(+m[1], mo - 1, dd, m[4] ? +m[4] : 0, m[5] ? +m[5] : 0), txt: m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' ' + m[4] + ':' + m[5] : '') };
+  }
+  SV.stampFRh = stampFRh; SV.dateInName = dateInName;
   SV.pad = pad; SV.fmtDateFR = fmtDateFR; SV.fmtTimeFR = fmtTimeFR; SV.stampFR = stampFR; SV.stampFile = stampFile;
   SV.personKey = personKey; SV.decisionKey = decisionKey; SV.isRowEmpty = isRowEmpty;
   SV.num = num; SV.round1 = round1; SV.round2 = round2; SV.str = str;
@@ -3891,6 +3939,9 @@ var SV = (function (g) {
     var rows = sheetRows(wb, SV.SHEETS.F2);
     if (!rows) return { rows: null, sheetNames: wb.SheetNames.slice() };
     var out = [];
+    // v3.2.0-alpha5 : colonnes « Courriel » et « Discipline » repérées par leur en-tête (pas « Courriel établissement »)
+    var iMail = -1, iDisc = -1;
+    (rows[0] || []).forEach(function (h, j) { var n = SV.norm(h); if (iMail < 0 && /^(courriel|mail|e-mail|email|adresse mail)$/.test(n)) iMail = j; if (iDisc < 0 && n === 'discipline') iDisc = j; });
     for (var i = 1; i < rows.length; i++) {
       var row = rows[i];
       if (SV.isRowEmpty(row)) continue;
@@ -3900,7 +3951,8 @@ var SV = (function (g) {
       var affParts = [ci.f2_aff1, ci.f2_aff2, ci.f2_aff3, ci.f2_aff4]
         .map(function (idx) { return idx < 0 ? '' : SV.str(row[idx]).trim(); })
         .filter(function (p) { return p !== ''; });
-      out.push({ nom: nom, prenom: prenom, message: SV.str(row[SV.FIXED.F2_MESSAGE]).trim(), affectation: affParts.join(' ') });
+      out.push({ nom: nom, prenom: prenom, message: SV.str(row[SV.FIXED.F2_MESSAGE]).trim(), affectation: affParts.join(' '),
+        mail: iMail >= 0 ? SV.str(row[iMail]).trim().toLowerCase() : '', disc: iDisc >= 0 ? SV.str(row[iDisc]).trim() : '' });
     }
     return { rows: out, sheetNames: wb.SheetNames.slice(), rawCount: rows.length - 1 };
   }
@@ -4272,7 +4324,7 @@ var SV = (function (g) {
     var seenGroups = {};
     // v3.2 : gel des quotas de la campagne 1 (inactif sans le réglage gelQuotas ; SV.gelActive n'existe que dans la page)
     var G = (typeof SV.gelActive === 'function') ? SV.gelActive() : null;
-    var gp = G && key && G.byPerson[key] ? (SV.gelPerson ? SV.gelPerson(G.byPerson, key, gelIdent(src, idx, (opts && opts.gelRows) || ciRows)) : G.byPerson[key]) : null;
+    var gp = G && key && G.byPerson[key] ? (SV.gelPerson ? SV.gelPerson(G.byPerson, key, (opts && opts.gelId) || gelIdent(src, idx, (opts && opts.gelRows) || ciRows)) : G.byPerson[key]) : null;
     for (var k = 0; k < ciRows.length; k++) {
       var r = ciRows[k];
       var rd = SV.rowDur(src, idx, r);
@@ -4341,7 +4393,14 @@ var SV = (function (g) {
       var h = { convoquees: 0, total: 0, cp50: 0 };
       var homonyme = false;
       if (foundCI && foundCI.length > 0) {
-        var r0 = foundCI[0];
+        // v3.2.0-alpha5 : ligne CI de CE module d'abord (homonymes : la bonne discipline et le bon courriel), sinon la première
+        var rowsMod0 = foundCI.filter(function (rr) { return SV.str(SV.cell(ci, rr, cm.f1_modcode)).trim() === String(modCode).trim(); });
+        // courriel du fichier de préinscription : il départage les homonymes, sur ce module comme ailleurs
+        var f2mail = row.mail ? String(row.mail).trim().toLowerCase() : '';
+        var rowsMail = f2mail ? foundCI.filter(function (rr) { return SV.str(SV.cell(ci, rr, cm.f1_mail)).trim().toLowerCase() === f2mail; }) : [];
+        var rowsModMail = rowsMod0.filter(function (rr) { return rowsMail.indexOf(rr) !== -1; });
+        if (rowsModMail.length) rowsMod0 = rowsModMail;
+        var r0 = rowsMod0.length ? rowsMod0[0] : rowsMail.length ? rowsMail[0] : foundCI[0];
         nomAff = SV.str(SV.cell(ci, r0, cm.f1_nom)) || nom2;
         prenomAff = SV.str(SV.cell(ci, r0, cm.f1_prenom)) || prenom2;
         civ = SV.str(SV.cell(ci, r0, cm.f1_civ));
@@ -4349,15 +4408,21 @@ var SV = (function (g) {
         disc = SV.str(SV.cell(ci, r0, cm.f1_disc));
         etab = SV.str(SV.cell(ci, r0, cm.f1_etab));
         var rowsMod = foundCI.filter(function (rr) { return SV.str(SV.cell(ci, rr, cm.f1_modcode)).trim() === String(modCode).trim(); });
-        hoursOpts.gelRows = rowsMod.length ? rowsMod : null;
+        if (rowsModMail.length) rowsMod = rowsModMail;
+        hoursOpts.gelRows = rowsMod.length ? rowsMod : rowsMail.length ? rowsMail : null;
+        // préinscrit absent du fichier source pour ce module et dont le courriel n'y figure pas : le courriel du fichier fait foi
+        hoursOpts.gelId = (!hoursOpts.gelRows && f2mail) ? { mails: [f2mail], discs: row.disc ? [SV.norm(row.disc)] : [] } : null;
         h = hoursForPerson(src, idx, foundCI, hoursOpts, key);
-        h.gelId = gelIdent(src, idx, hoursOpts.gelRows || foundCI); hoursOpts.gelRows = null;
+        h.gelId = hoursOpts.gelId || gelIdent(src, idx, hoursOpts.gelRows || foundCI); hoursOpts.gelRows = null; hoursOpts.gelId = null;
         var mails = {}; var nMails = 0;
         for (var k = 0; k < foundCI.length; k++) {
           var mk = SV.str(SV.cell(ci, foundCI[k], cm.f1_mail)).trim().toLowerCase();
           if (mk && !mails[mk]) { mails[mk] = true; nMails++; }
         }
         homonyme = nMails > 1;
+        // courriel du fichier de préinscription absent du fichier source : les lignes CI trouvées sont celles d'un homonyme (ou
+        // d'un ancien courriel) ; on affiche le courriel et la discipline du fichier de préinscription, badge « Homonyme ? »
+        if (f2mail && !rowsMail.length) { mail = f2mail; if (row.disc) disc = row.disc; homonyme = true; }
       }
       if (foundGAIA && foundGAIA.length > 0) grade = SV.str(SV.cell(gaia, foundGAIA[0], cm.f1_gaia_grade));
 
@@ -4675,7 +4740,7 @@ var SV = (function (g) {
     var cm = idx.cm, ci = src.ci;
     var now = (opts && opts.now) || new Date();
     var decideur = SV.str(opts && opts.decideur).trim();
-    var horodatage = SV.stampFR(now);
+    var horodatage = SV.stampFRh ? SV.stampFRh(now) : SV.stampFR(now); // v3.2.0-alpha5 : « 04/11/2026 16h09 »
     var KEEP = SV.KEEP;
     function filterRow(row) { return KEEP.map(function (k) { return SV.cell(ci, row, k); }); }
     var outHeaders = KEEP.map(function (k) { return k < ci.headers.length ? ci.headers[k] : ''; }).concat(SV.EXPORT_EXTRA_HEADERS);
@@ -4736,7 +4801,9 @@ var SV = (function (g) {
         if (!d2 || (d2.value !== 'Oui' && d2.value !== 'Non')) return;
         var v = {};
         v[cm.f1_nom] = c.nomAff || c.nom2; v[cm.f1_prenom] = c.prenomAff || c.prenom2; v[cm.f1_civ] = c.civ || ''; v[cm.f1_mail] = c.mail || ''; v[cm.f1_disc] = c.disc || '';
-        v[cm.f1_modcode] = m.code; v[cm.f1_modlib] = m.lib || ''; v[cm.f1_sessid] = m.session || ''; v[cm.f1_dur] = (m.dureeModule === null || m.dureeModule === undefined) ? '' : m.dureeModule;
+        // v3.2.0-alpha5 : même type de cellule que les lignes CI (un nombre si le fichier source donne des nombres)
+        var likeCI = function (val, col) { var smp = rows.length ? SV.cell(ci, rows[0], col) : (ci.rows.length ? SV.cell(ci, ci.rows[0], col) : ''), s = SV.str(val).trim(); return typeof smp === 'number' && /^\d+$/.test(s) ? +s : s; };
+        v[cm.f1_modcode] = likeCI(m.code, cm.f1_modcode); v[cm.f1_modlib] = m.lib || ''; v[cm.f1_sessid] = likeCI(m.session || '', cm.f1_sessid); v[cm.f1_dur] = (m.dureeModule === null || m.dureeModule === undefined) ? '' : m.dureeModule;
         var row = KEEP.map(function (k) { return v[k] === undefined ? '' : v[k]; });
         var lib2 = m.lib || '', off2 = lib2.substring(0, 3);
         var id2 = (c.nomAff || c.nom2) + '|' + (c.prenomAff || c.prenom2) + '|' + m.code + '|' + (m.session || '');
@@ -5004,7 +5071,7 @@ var SV = (function (g) {
         if ((opts.keepExisting || fixed(c)) && v === 'Oui') { r.alreadyOui++; return; }
         if ((opts.keepExisting || fixed(c)) && v === 'Non') { r.alreadyNon++; return; }
         var ok = true;
-        if (c.isPrepaConcours) { r.prepa++; ok = false; }
+        if (c.isPrepaConcours && !isCP50) { r.prepa++; ok = false; } // v3.2.0-alpha5 : un atelier CP50 accepte les Prépa concours (règle du 25/11/2026)
         if (c.isFSTP) { r.fstp++; ok = false; }
         if (ok && opts.excludeNotFound && c.notInAny) { r.notFound++; ok = false; }
         if (ok && !(isCP50 && opts.cp50IgnoreHours) && !(c.totalHeures <= threshold)) { r.overHours++; ok = false; }
@@ -5216,7 +5283,8 @@ var SV = (function (g) {
       list.push(item);
     });
     // Les formations fermées (seuil hors d'atteinte) et les CP50 (jamais fermés) sont exclus du choix de la priorité
-    var known = list.filter(function (i) { return i.known && !i.closed && !i.exempt; }).sort(riskOrder);
+    // v3.2.0-alpha5 (règle du 25/11/2026) : seule une formation dont le seuil n'est pas atteint (inscrits < seuil) peut être prioritaire
+    var known = list.filter(function (i) { return i.known && !i.closed && !i.exempt && i.under; }).sort(riskOrder);
     var priorities = [];
     if (known.length) {
       var best = known[0];
@@ -6166,6 +6234,10 @@ var SV = (function (g) {
   /** « 26/09/2026 14:30 » → ms (null si illisible) ; accepte aussi une date ISO ou un objet Date (cellule Excel). */
   function parseStamp(v) {
     if (v instanceof Date) return isNaN(v.getTime()) ? null : v.getTime();
+    // v3.2.0-alpha5 : horodatage resté en nombre dans Grist (secondes Unix) ou numéro de série Excel (jours depuis 1900)
+    var nv = typeof v === 'number' ? v : (/^\d{9,10}(\.\d+)?$/.test(SV.str(v).trim()) ? parseFloat(SV.str(v)) : NaN);
+    if (isFinite(nv) && nv >= 1e9 && nv < 1e11) return Math.round(nv * 1000);
+    if (typeof v === 'number' && v > 40000 && v < 60000) { var dj = Math.floor(v); return new Date(1899, 11, 30 + dj, 0, 0, Math.round((v - dj) * 86400)).getTime(); }
     var s = SV.str(v).trim();
     if (!s) return null;
     var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2})[:h](\d{2}))?/);
@@ -6371,7 +6443,7 @@ var SV = (function (g) {
     var hasCap = isNum(f.capacity);
     return {
       FERMEE: !!(f.moduleClosed || f.sessionCancelled),
-      FSTP_PREPA: !!(f.isFSTP || f.isPrepaConcours),
+      FSTP_PREPA: !!(f.isFSTP || (f.isPrepaConcours && !f.isCP50)), // v3.2.0-alpha5 : sur un CP50, seuls les FSTP sont écartés
       PRIO_AILLEURS: !!f.priorityElsewhere && !f.isCP50,
       QUOTA: quotaVrai(f),
       COMPLET: hasCap && isNum(f.ouiInGroup) && f.ouiInGroup >= f.capacity
@@ -8390,7 +8462,7 @@ var SV = (function (g) {
     if (s) {
       var model = s.model;
       h += stepHead(1, 'Source GAIA-SOFIA', 'done') + '<div class="step-file" title="' + esc(s.name) + '">' + esc(s.name) + '</div>' +
-        '<div class="step-meta">Fichier du ' + esc(ui.fmtDate(s.lastModified)) + ' · ' + (model.ci ? ui.fmtN(model.ci.rows.length) + ' candidatures' : '<span class="t-ko">onglet CI absent</span>') + ' · ' + s.idx.cp50Codes.size + ' module' + (s.idx.cp50Codes.size > 1 ? 's' : '') + ' CP50' +
+        '<div class="step-meta">' + (SV.dateInName && SV.dateInName(s.name) ? '<span title="Date d\'extraction lue dans le nom du fichier (fichier lui-même daté du ' + esc(ui.fmtDate(s.lastModified)) + ')">Extraction du ' + esc(SV.dateInName(s.name).txt) + '</span>' : 'Fichier du ' + esc(ui.fmtDate(s.lastModified))) + ' · ' + (model.ci ? ui.fmtN(model.ci.rows.length) + ' candidatures' : '<span class="t-ko">onglet CI absent</span>') + ' · ' + s.idx.cp50Codes.size + ' module' + (s.idx.cp50Codes.size > 1 ? 's' : '') + ' CP50' +
         (model.warnings.length ? ' · <span class="t-ko">' + ui.plural(model.warnings.length, 'avertissement') + ' (Réglages › Console)</span>' : '') + '</div>' +
         '<div class="step-acts">' + pickLabel('src-file', 'Remplacer') + link('remove-source', 'Retirer', { muted: true }) + '</div>';
     } else if (st.sourceStatus === 'loading') {
@@ -8708,8 +8780,10 @@ var SV = (function (g) {
         ? '<span class="badge badge-prio-here" title="Formation prioritaire pour ce candidat : potentiel ' + pr.priority.potentiel + ' pour un seuil de ' + pr.priority.seuil + (pr.priority.manque > 0 ? ' (il manque ' + pr.priority.manque + ')' : '') + '">⚑ Prioritaire ici' + (pr.exAequo ? ' (ex æquo)' : '') + '</span>'
         : '<span class="badge badge-prio" title="Formation prioritaire : ' + esc(pr.priority.lib) + (pr.priority.glib ? ' (groupe ' + esc(pr.priority.glib) + ')' : '') + (pr.priority.ingenieur ? ' (' + esc(pr.priority.ingenieur) + ')' : '') + ' — potentiel ' + pr.priority.potentiel + ' pour un seuil de ' + pr.priority.seuil + (pr.priority.manque > 0 ? ', il manque ' + pr.priority.manque : '') + '">⚑ Priorité ' + pr.priorities.map(function (x) { return esc(x.code) + (x.glib ? ' · ' + esc(x.glib) : ''); }).join(' / ') + '</span>';
     }
-    if (pr && st.seuils && pr.closedCount) return '<span class="badge badge-closed" title="Toutes ses formations en attente au seuil connu sont fermées (seuil hors d\'atteinte)">&gt; ' + limite() + ' h · formations fermées</span>';
-    if (pr && st.seuils) return '<span class="badge badge-prio-none" title="Offreurs de ses candidatures absents du fichier des seuils">&gt; ' + limite() + ' h · seuil inconnu</span>';
+    // v3.2.0-alpha5 : sans formation sous son seuil, pas de badge ; « fermées » et « seuil inconnu » seulement quand c'est la vraie raison
+    var cl = pr ? (pr.candidatures || []).filter(function (i) { return !i.exempt; }) : [], kn = cl.filter(function (i) { return i.known; });
+    if (pr && st.seuils && kn.length && kn.every(function (i) { return i.closed; })) return '<span class="badge badge-closed" title="Toutes ses formations en attente au seuil connu sont fermées (seuil hors d\'atteinte)">&gt; ' + limite() + ' h · formations fermées</span>';
+    if (pr && st.seuils && cl.length && !kn.length) return '<span class="badge badge-prio-none" title="Offreurs de ses candidatures absents du fichier des seuils">&gt; ' + limite() + ' h · seuil inconnu</span>';
     return '';
   };
 
@@ -8740,7 +8814,7 @@ var SV = (function (g) {
     return '<tr class="' + cls + '" data-action="row-click" data-key="' + esc(c.personKey) + '" data-module="' + esc(module.id) + '" data-row="' + i + '">' +
       '<td class="c-n">' + (i + 1) + '</td>' +
       '<td class="c-dec">' + ui.decisionSeg(module.id, c.personKey, dv) + '</td>' +
-      '<td class="c-cand"' + (c.mail ? ' title="' + esc(c.mail) + '"' : '') + '><div class="cand-name"><span class="name">' + esc(c.nomAff) + '</span> <span class="pre">' + esc(c.prenomAff) + '</span>' + (SV.grist ? SV.grist.gelBadge(c) : '') + '</div>' + (sub ? '<div class="cand-sub">' + sub + '</div>' : '') + '</td>' +
+      '<td class="c-cand"' + (c.mail ? ' title="' + esc(c.mail) + '"' : '') + '><div class="cand-name"><span class="name">' + esc(c.nomAff) + '</span> <span class="pre">' + esc(c.prenomAff) + '</span>' + (SV.grist ? SV.grist.gelBadge(c, module) : '') + '</div>' + (sub ? '<div class="cand-sub">' + sub + '</div>' : '') + '</td>' +
       '<td class="c-disc"><div class="disc">' + (c.disc ? esc(disc) : '<span class="muted">—</span>') + (c.discExcluded ? ' <span class="badge badge-cp50" title="Discipline hors limite d\'heures">hors seuil</span>' : '') + '</div>' + (c.affectation ? '<div class="aff ellipsis" title="' + esc(c.affectation) + '">' + esc(aff) + '</div>' : '') + '</td>' +
       ui.hoursCells(c, module, dv) +
       '<td class="c-msg">' + msgHtml + '</td>' +
@@ -8754,8 +8828,10 @@ var SV = (function (g) {
       if (!sortable || !key) return '<th class="' + (cls || '') + '"' + t + '>' + label + '</th>';
       return '<th class="sortable ' + (cls || '') + (s.key === key ? ' sort-' + s.dir : '') + '" data-action="sort" data-key="' + key + '"' + t + '>' + label + '<i class="sort-icon"></i></th>';
     };
-    var cols = st.settings.showMessages === false ? [2.5, 12, 29, 33, 5, 7, 11.5] : [2.5, 12, 23, 26, 4, 22, 10.5];
-    var colgroup = '<colgroup>' + cols.map(function (w) { return '<col style="width:' + w + '%">'; }).join('') + '</colgroup>';
+    // v3.2.0-alpha5 : # et Décision en largeur fixe (le sélecteur Oui / Non / Att. ne déborde plus sur le nom dans le widget) ;
+    // les autres colonnes se partagent le reste en pourcentage
+    var cols = st.settings.showMessages === false ? ['34px', '150px', 32, 36, 8, 9, 15] : ['34px', '150px', 25, 28, 7, 27, 13];
+    var colgroup = '<colgroup>' + cols.map(function (w) { return '<col style="width:' + (typeof w === 'number' ? w + '%' : w) + '">'; }).join('') + '</colgroup>';
     return colgroup + '<thead><tr>' + th('', '#', 'c-n') + th('decision', 'Décision') + th('nomAff', 'Candidat') + th('disc', 'Discipline · affectation') +
       th('totalHeures', 'Total', 'right', 'Total des heures de préinscription (toutes les sessions de chaque groupe)') +
       th('message', 'Message') + th('grade', 'Grade · contrôles') + '</tr></thead>';
@@ -8785,6 +8861,7 @@ var SV = (function (g) {
     } else places = '<div class="places-top"><span class="b">Décisions</span><span class="muted" title="Nombre de places inconnu : module et groupe absents du tableau des capacités">places non renseignées</span></div>';
     places += ui.stackBar(s, 'lg') + '<div class="places-sub">' + ui.decText(s) + '</div>';
     var banners = '';
+    if (m.isCP50) banners += '<div class="banner banner-warn cp50-guard"><strong>Atelier CP50</strong> : les ateliers se traitent au fil de l\'eau, hors quota et hors campagne. Si tu le traites quand même ici, la sélection automatique te demandera confirmation ; elle écarte les FSTP mais accepte les Prépa concours.</div>';
     if (m.code && st.source && !m.inCI) banners += '<div class="banner banner-warn">Aucune candidature individuelle avec le code ' + esc(m.code) + ' dans le fichier source : vérifiez le code du module ou la fraîcheur du fichier source. L\'export de ce module sera vide.</div>';
     if (!st.source) banners += '<div class="banner banner-warn">Fichier source absent : heures, badges et export indisponibles. Importez-le depuis l\'onglet Modules.</div>';
     return '<div class="card mod-card" id="mod-header">' +
@@ -9134,11 +9211,14 @@ var SV = (function (g) {
     var names = (st.source && st.source.idx.personNames.get(key)) || null;
     var cand = null, mine = [];
     st.modules.forEach(function (m) { var c = m.candidates.find(function (x) { return x.personKey === key; }); if (c) { mine.push({ m: m, c: c }); if (!cand) cand = c; } });
+    // v3.2.0-alpha5 : la fiche ouverte depuis un module montre la ligne de CE module (bon homonyme, badge C1 de ce module)
+    var dMod = d.moduleId ? SV.store.getModule(d.moduleId) : null, dCand = dMod ? dMod.candidates.find(function (x) { return x.personKey === key; }) : null;
+    if (dCand) cand = dCand; else dMod = null;
     var nom = cand ? cand.nomAff : names ? names.nom : key.split('|')[0], prenom = cand ? cand.prenomAff : names ? names.prenom : (key.split('|')[1] || '');
     var i = d.nav.indexOf(d.key), hasPrev = i > 0, hasNext = i !== -1 && i < d.nav.length - 1;
     var pr = st.source ? SV.store.priorityFor(key) : null;
     // ---- En-tête ----
-    var h = '<div class="dr-h"><div class="row1"><span class="nm" title="' + esc(nom + ' ' + prenom) + '">' + esc(nom) + ' <span>' + esc(prenom) + '</span></span>' + (SV.grist ? SV.grist.gelBadge({ personKey: key, gelId: cand ? cand.gelId : null }) : '') +
+    var h = '<div class="dr-h"><div class="row1"><span class="nm" title="' + esc(nom + ' ' + prenom) + '">' + esc(nom) + ' <span>' + esc(prenom) + '</span></span>' + (SV.grist ? SV.grist.gelBadge(cand || { personKey: key, gelId: null }, dMod) : '') +
       (mine.length > 1 ? '<span class="badge badge-multi" title="Candidat(e) sur ' + mine.length + ' modules chargés">×' + mine.length + '</span>' : '') + (cand ? ui.badges(cand) : '') +
       '<span class="nav"><button type="button" class="btn btn-sm btn-icon" data-action="drawer-prev"' + (hasPrev ? '' : ' disabled') + ' title="Fiche précédente (←)" aria-label="Fiche précédente">‹</button><button type="button" class="btn btn-sm btn-icon" data-action="drawer-next"' + (hasNext ? '' : ' disabled') + ' title="Fiche suivante (→)" aria-label="Fiche suivante">›</button><button type="button" class="btn btn-sm btn-icon" data-action="drawer-close" title="Fermer (Échap)" aria-label="Fermer">×</button></span></div>';
     var l2 = [], l3 = [];
@@ -9834,7 +9914,7 @@ var SV = (function (g) {
     if (!st.modules.some(function (m) { return m.code; })) { ui.toast('Aucun module chargé', 'warn'); return; }
     var opts = Object.assign({}, lastOpts);
     return SV.store.autoSelect(moduleIds, opts, true).then(function (res) {
-      var html = '<div class="auto-grid"><div><div class="section-title">Règles appliquées</div><div class="auto-rules">Total de préinscriptions ≤ ' + res.threshold + ' h, les plus faibles d\'abord<br>Jamais de Prépa concours / certif ni de FSTP<br>Places du groupe (tableau des capacités : module + groupe), les Oui déjà pris comptant dans le plafond</div></div>' +
+      var html = '<div class="auto-grid"><div><div class="section-title">Règles appliquées</div><div class="auto-rules">Total de préinscriptions ≤ ' + res.threshold + ' h, les plus faibles d\'abord<br>Jamais de FSTP ; pas de Prépa concours / certif, sauf sur un atelier CP50<br>Places du groupe (tableau des capacités : module + groupe), les Oui déjà pris comptant dans le plafond</div></div>' +
         '<div class="auto-opts"><div class="auto-opt"><span>Garder les décisions déjà prises</span><button type="button" class="switch" role="switch" data-opt="keepExisting" aria-checked="' + (opts.keepExisting ? 'true' : 'false') + '"></button></div>' +
         '<div class="auto-opt"><span>Candidats non retenus</span><div class="segmented sm"><button type="button" data-opt="othersToNon" data-value="0" class="' + (opts.othersToNon ? '' : 'active') + '">Restent en attente</button><button type="button" data-opt="othersToNon" data-value="1" class="' + (opts.othersToNon ? 'active' : '') + '">Passent à Non</button></div></div>' +
         '<details class="auto-more"><summary>Autres options</summary><label class="check"><input type="checkbox" data-opt="excludeNotFound"' + (opts.excludeNotFound ? ' checked' : '') + '><span>Ne pas retenir les candidats introuvables dans le fichier source</span></label>' +
@@ -9873,11 +9953,22 @@ var SV = (function (g) {
       });
     });
   };
+  /** v3.2.0-alpha5 : garde-fou CP50. Les ateliers se traitent au fil de l'eau, hors campagne : confirmation demandée avant
+   *  la sélection automatique, sans rien bloquer (celui qui traite réellement un atelier peut continuer). */
+  function cp50Guard(ids) {
+    var st = S(), list = (ids ? st.modules.filter(function (m) { return ids.indexOf(m.id) !== -1; }) : st.modules).filter(function (m) { return m.isCP50; });
+    if (!list.length) return Promise.resolve(true);
+    var codes = list.map(function (m) { return m.code + (m.groupe ? ' (groupe ' + m.groupe + ')' : ''); });
+    return ui.confirm('', { title: 'Atelier CP50', ok: 'Continuer quand même', cancel: 'Annuler',
+      html: '<p>' + (list.length > 1 ? 'Ces modules sont des ateliers CP50 : ' : 'Ce module est un atelier CP50 : ') + '<b>' + esc(codes.join(', ')) + '</b>.</p>' +
+        '<p>Les ateliers se traitent au fil de l\'eau, hors quota et hors campagne. La sélection automatique y écarte les FSTP mais accepte les Prépa concours.</p>' +
+        '<p>Continuer la sélection automatique ?</p>' });
+  }
   ui.actions['auto-select'] = function (el) {
     var st = S();
-    if (el.dataset.module) { var m = SV.store.getModule(el.dataset.module); ui.autoSelectDialog([el.dataset.module], m ? 'module ' + m.code : null); return; }
+    if (el.dataset.module) { var m = SV.store.getModule(el.dataset.module); cp50Guard([el.dataset.module]).then(function (ok) { if (ok) ui.autoSelectDialog([el.dataset.module], m ? 'module ' + m.code : null); }); return; }
     var checked = st.modules.filter(function (m) { return st.ui.moduleChecks[m.id]; }).map(function (m) { return m.id; });
-    ui.autoSelectDialog(checked.length ? checked : null, checked.length ? ui.plural(checked.length, 'module coché', 'modules cochés') : null);
+    cp50Guard(checked.length ? checked : null).then(function (ok) { if (ok) ui.autoSelectDialog(checked.length ? checked : null, checked.length ? ui.plural(checked.length, 'module coché', 'modules cochés') : null); });
   };
 })(SV);
 
@@ -9956,6 +10047,7 @@ var SV = (function (g) {
     return ui.modal({ title: 'Comment la formation prioritaire est-elle choisie ?', html:
       '<p>Pour chaque stage (module et groupe) : <b>inscrits</b> = retenus dans SOFIA + Oui (les vôtres et ceux des collègues du consolidé) ; <b>préinscrits</b> = candidats en attente dans SOFIA, un compteur figé qui ne bouge pas avec les décisions ; <b>potentiel</b> = ce que le stage peut atteindre en acceptant tout le monde (inscrits + préinscrits pas encore retenus). Le tout est comparé au <b>seuil minimum</b> du stage : celui du <b>formateur déchargé</b> (tableau des capacités, module et groupe) s\'il est renseigné, sinon celui de l\'offreur.</p>' +
       '<p>La formation prioritaire d\'un candidat > 24 h est, parmi ses candidatures en attente, celle dont le potentiel couvre le moins bien son seuil (celle qui a le plus besoin de lui pour ne pas fermer), puis celle qui a le moins d\'inscrits. À égalité parfaite, les formations sont signalées ex æquo.</p>' +
+      '<p><b>Depuis la v3.2.0-alpha5</b> (règle du 25/11/2026), seule une formation qui n\'a pas encore atteint son seuil d\'ouverture (inscrits strictement sous le seuil minimum) peut être prioritaire. Si toutes ses formations ont déjà assez d\'inscrits, le candidat n\'a pas de formation prioritaire, ni de badge.</p>' +
       '<p>Une formation à qui il manque <b>strictement plus de ' + ui.plural(d, 'préinscrit') + '</b> est considérée <b>fermée</b> (réglable dans Réglages › Options avancées) : elle n\'est jamais prioritaire et ne compte pas dans les collègues à consulter. Les ateliers pédagogiques <b>CP50</b> suivent le seuil de la ligne <b>ATELIERS</b> du tableau des seuils (8 stagiaires) : en dessous, ils n\'ouvrent pas et peuvent donc être « sous le seuil » ou fermés. Leur durée n\'est en revanche pas décomptée du quota d\'heures, et ils ne sont jamais proposés comme formation prioritaire. Une candidature déjà tranchée (Oui ou Non, ici ou dans le consolidé) quitte la liste : elle est seulement rappelée sous les lignes du candidat, et un candidat dont toutes les candidatures sont tranchées disparaît du tableau. La liste se vide ainsi au fur et à mesure des décisions.</p>' +
       '<p>Chaque candidature indique ses effectifs en clair : « 4 inscrits · 8 préinscrits · potentiel 8 · seuil 15 · manque 7 ». La <b>marge</b> est le potentiel moins le seuil : « marge +3 » = trois candidats de plus que nécessaire ; « manque 2 » = encore atteignable.</p>' });
   }
@@ -10401,7 +10493,15 @@ var SV = (function (g) {
  *   - au démarrage, la pièce jointe la plus récente est chargée d'office si le poste n'a pas de copie, ou si sa copie venait déjà
  *     de Grist ; une copie chargée à la main n'est jamais remplacée sans l'accord de l'utilisateur (bandeau) ;
  *   - un dépôt fait pendant la séance est signalé par un bandeau, jamais chargé d'office (pas d'analyse de 15 s en plein travail) ;
- *   - la comparaison se fait sur l'empreinte du contenu (SHA-256), pas sur les dates ; la date AAAAMMJJ du nom dit laquelle est la plus récente. */
+ *   - la comparaison se fait sur l'empreinte du contenu (SHA-256), pas sur les dates ; la date AAAAMMJJ du nom dit laquelle est la plus récente.
+ * v3.2.0-alpha5 (26/11/2026) :
+ *   - nom du document : Grist ne le donne pas au widget (getDocName renvoie l'identifiant, le jeton ne lit pas les métadonnées) ;
+ *     on affiche le libellé saisi dans la configuration du widget (option « libelle », bouton « Ouvrir la configuration »
+ *     du panneau Créateur), à défaut l'identifiant abrégé ;
+ *   - garde-fou des dépôts : si le dernier dépôt porte une date d'extraction AAAAMMJJ plus ancienne qu'un des 5 dépôts
+ *     précédents du même type, bandeau orange (le dépôt reste la référence : il est chargé comme d'habitude) ;
+ *   - badge C1 selon le module affiché : « dont ce module » quand le module fait déjà partie de l'acquis, « hors quota »
+ *     (grisé) sur un atelier CP50, un module exempté ou pour une discipline hors limite. */
 (function (SV) {
   'use strict';
 
@@ -10423,7 +10523,9 @@ var SV = (function (g) {
     rec: {},                               // ce que le poste a chargé depuis Grist : { source: {...}, gel: {...} }
     status: { source: '', gel: '' },       // texte court pour le bandeau
     offers: {},                            // propositions en attente : { kind: { depot, dl, raison } }
-    busy: '', lastCheck: null, started: false
+    busy: '', lastCheck: null, started: false,
+    label: '',                             // v3.2.0-alpha5 : libellé du document (option du widget)
+    orderWarn: {}                          // v3.2.0-alpha5 : { kind: {...} } dernier dépôt plus ancien qu'un précédent
   };
   var chain = Promise.resolve();          // les vérifications passent une par une (pas de double téléchargement)
 
@@ -10463,6 +10565,7 @@ var SV = (function (g) {
   }
   /** Date AAAAMMJJ lue dans un nom de fichier (convention Source_GAIA-SOFIA-20261005.xlsx) ; null si absente. */
   function dateInName(name) {
+    if (SV.dateInName && SV.dateInName !== dateInName) return SV.dateInName(name);
     var m = /(20\d{2})(\d{2})(\d{2})(?:[_-]?(\d{2})h?(\d{2}))?/.exec(String(name || ''));
     if (!m) return null;
     var mo = +m[2], d = +m[3];
@@ -10504,7 +10607,8 @@ var SV = (function (g) {
       ? urls.slice(1).reduce(function (p, u) { return p.catch(function () { return withTimeout(loadScript(u), CFG.timeoutMs, 'API Grist'); }); }, withTimeout(loadScript(urls[0]), CFG.timeoutMs, 'API Grist'))
       : Promise.resolve('intégrée');
     return load.then(function () {
-      window.grist.ready({ requiredAccess: 'full', allowSelectBy: false });
+      window.grist.ready({ requiredAccess: 'full', allowSelectBy: false, onEditOptions: editOptions });
+      try { window.grist.onOptions(function (o) { var l = o && typeof o.libelle === 'string' ? o.libelle.trim() : ''; if (l !== B.label) { B.label = l; setAppbar(); render(); } }); } catch (e) {}
       return withTimeout(window.grist.docApi.getAccessToken({ readOnly: true }), CFG.timeoutMs, 'jeton d\'accès');
     }).then(function (a) {
       if (!a || !a.baseUrl) throw new Error('jeton sans adresse de document');
@@ -10526,8 +10630,26 @@ var SV = (function (g) {
       return B;
     });
   }
+  /** Nom affiché du document : libellé de la configuration du widget, sinon le nom donné par Grist s'il diffère de
+   *  l'identifiant, sinon l'identifiant abrégé. */
+  function docTitle() {
+    if (B.label) return B.label;
+    if (B.docName && B.docName !== B.docId) return B.docName;
+    return B.docId ? 'document ' + (B.docId.length > 10 ? B.docId.slice(0, 6) + '…' : B.docId) : 'document';
+  }
+  /** Bouton « Ouvrir la configuration » du panneau Créateur : saisie du libellé du document, enregistré dans le widget. */
+  function editOptions() {
+    if (!SV.ui || !SV.ui.prompt) return;
+    SV.ui.prompt('Configuration du widget', 'Nom du document affiché dans le Vérificateur (ligne bleue « Grist »)', B.label || (B.docName !== B.docId ? B.docName : '')).then(function (v) {
+      if (v === null || v === undefined) return;
+      return Promise.resolve(window.grist.setOption('libelle', v)).then(function () {
+        B.label = v; setAppbar(); render();
+        SV.ui.toast('Libellé enregistré dans le widget' + (v ? ' : ' + SV.esc(v) : ' (effacé)'), 'ok', 4000);
+      }, function (e) { SV.ui.toast('Libellé non enregistré : ' + SV.esc(msg(e)) + ' (droits de modification du document requis)', 'err', 7000); });
+    });
+  }
   function modeLabel() {
-    return { local: 'mode local', connecting: 'connexion en cours', grist: 'connecté au document' + (B.docName ? ' « ' + B.docName + ' »' : ''),
+    return { local: 'mode local', connecting: 'connexion en cours', grist: 'connecté au document « ' + docTitle() + ' »',
       noaccess: 'accès complet au document non accordé', offline: 'API Grist injoignable, mode local' }[B.mode] || B.mode;
   }
 
@@ -10556,8 +10678,8 @@ var SV = (function (g) {
   function checkNow(auto) {
     return readDepots().then(function () {
       B.lastCheck = Date.now(); render();
-      return handle('source', auto);
-    }).then(function () { return handle('gel', auto); }).then(render);
+      return handle('source', auto).then(function () { return checkOrder('source'); });
+    }).then(function () { return handle('gel', auto).then(function () { return checkOrder('gel'); }); }).then(render);
   }
   function readDepots() {
     return withTimeout(window.grist.docApi.fetchTable(CFG.table), 30000, 'lecture de ' + CFG.table).then(function (cols) {
@@ -10566,14 +10688,17 @@ var SV = (function (g) {
       if (!cf) Object.keys(cols).forEach(function (k) { if (!cf && k !== 'id' && (cols[k] || []).some(function (v) { return Array.isArray(v) && v[0] === 'L'; })) cf = k; });
       if (!cf) throw new Error('colonne « ' + CFG.cols.fichier + ' » (type Pièces jointes) introuvable dans ' + CFG.table);
       if (!cols[CFG.cols.type]) throw new Error('colonne « ' + CFG.cols.type + ' » introuvable dans ' + CFG.table);
-      var best = { source: null, gel: null };
+      var all = { source: [], gel: [] }, best = { source: null, gel: null };
       (cols.id || []).forEach(function (id, i) {
         var k = kindOf(cols[CFG.cols.type][i]), ids = attIds(cols[cf][i]);
         if (!k || !ids.length) return;
-        if (!best[k] || id > best[k].rowId) {
-          best[k] = { kind: k, rowId: id, attId: ids[ids.length - 1], nbPieces: ids.length,
-            le: cols[CFG.cols.le] ? toTs(cols[CFG.cols.le][i]) : null, par: cols[CFG.cols.par] ? String(cols[CFG.cols.par][i] || '') : '' };
-        }
+        all[k].push({ kind: k, rowId: id, attId: ids[ids.length - 1], nbPieces: ids.length,
+          le: cols[CFG.cols.le] ? toTs(cols[CFG.cols.le][i]) : null, par: cols[CFG.cols.par] ? String(cols[CFG.cols.par][i] || '') : '' });
+      });
+      // le plus grand identifiant de ligne fait foi ; les 5 dépôts précédents servent au garde-fou de l'ordre (alpha5)
+      Object.keys(all).forEach(function (k) {
+        all[k].sort(function (a, b) { return b.rowId - a.rowId; });
+        if (all[k].length) { best[k] = all[k][0]; best[k].prev = all[k].slice(1, 6); }
       });
       B.depots = best;
     }).catch(function (e) {
@@ -10629,6 +10754,49 @@ var SV = (function (g) {
       if (!m || !m.blob || !m.blob.arrayBuffer) return null;
       return m.blob.arrayBuffer().then(sha256).then(function (h) { hashCache = { at: at, hash: h }; return h; });
     }).catch(function () { return null; });
+  }
+
+  // ---------------- Garde-fou de l'ordre des dépôts (alpha5) ----------------
+  var metaCache = {};
+  /** Métadonnées d'une pièce jointe (nom, taille, date de dépôt), sans téléchargement du contenu. */
+  function attMeta(attId) {
+    if (metaCache[attId]) return Promise.resolve(metaCache[attId]);
+    return withTimeout(window.grist.docApi.getAccessToken({ readOnly: true }), CFG.timeoutMs, 'jeton d\'accès').then(function (a) {
+      return fetch(a.baseUrl + '/attachments/' + attId + '?auth=' + encodeURIComponent(a.token), { credentials: 'omit' });
+    }).then(function (r) {
+      if (!r.ok) throw new Error('métadonnées de la pièce jointe n° ' + attId + ' : réponse HTTP ' + r.status);
+      return r.json();
+    }).then(function (m) { metaCache[attId] = m; return m; });
+  }
+  /** Le dernier dépôt d'un type porte-t-il une date d'extraction (nom AAAAMMJJ) plus ancienne qu'un dépôt précédent ?
+   *  Ne bloque rien : le dernier dépôt reste la référence, un bandeau orange le signale. */
+  function checkOrder(kind) {
+    var d = B.depots[kind];
+    delete B.orderWarn[kind];
+    if (!d || !d.prev || !d.prev.length) return Promise.resolve();
+    return attMeta(d.attId).then(function (ml) {
+      var dl = dateInName(ml && ml.fileName);
+      if (!dl) return;
+      return Promise.all(d.prev.map(function (p) { return attMeta(p.attId).catch(function () { return null; }); })).then(function (ms) {
+        var w = null;
+        ms.forEach(function (m, i) {
+          var dp = m ? dateInName(m.fileName) : null;
+          if (dp && dp.t > dl.t && (!w || dp.t > w.dp.t)) w = { dp: dp, nom: m.fileName, depot: d.prev[i] };
+        });
+        if (!w) return;
+        B.orderWarn[kind] = { dernier: { attId: d.attId, nom: ml.fileName, txt: dl.txt, par: d.par }, precedent: { attId: w.depot.attId, nom: w.nom, txt: w.dp.txt, par: w.depot.par } };
+        SV.log('Widget Grist, ' + KINDS[kind] + ' : le dernier dépôt (pièce jointe n° ' + d.attId + ', extraction du ' + dl.txt + ') est plus ancien que la pièce jointe n° ' + w.depot.attId + ' (extraction du ' + w.dp.txt + ')', 'warn');
+      });
+    }).catch(function (e) { SV.log('Widget Grist : contrôle de l\'ordre des dépôts impossible (' + msg(e) + ')', 'warn'); });
+  }
+  function orderHtml(kind) {
+    var w = B.orderWarn[kind];
+    if (!w) return '';
+    var quoi = kind === 'source' ? 'fichier source' : 'classeur du gel';
+    return '<div class="banner banner-warn grist-order"><span>⚠</span><span class="grow"><strong>Dernier dépôt plus ancien que le précédent</strong> (' + quoi + ') : la pièce jointe n° ' + w.dernier.attId +
+      ' <strong>' + SV.esc(w.dernier.nom || '') + '</strong> (extraction du ' + SV.esc(w.dernier.txt) + (w.dernier.par ? ', déposée par ' + SV.esc(w.dernier.par) : '') + ') est plus ancienne que la pièce jointe n° ' + w.precedent.attId +
+      ' <strong>' + SV.esc(w.precedent.nom || '') + '</strong> (extraction du ' + SV.esc(w.precedent.txt) + ').' +
+      ' Le widget s\'appuie quand même sur le dernier dépôt. Si c\'est une erreur, supprime la dernière ligne de ' + CFG.table + ' puis clique « Vérifier les dépôts ».</span></div>';
   }
 
   /** Téléchargement d'une pièce jointe avec un jeton en lecture seule (validé par le prototype 0.5). */
@@ -10734,8 +10902,9 @@ var SV = (function (g) {
     var h = '';
     if (B.tableError) h += '<div class="banner banner-warn"><span>⚠</span><span class="grow"><strong>Dépôts Grist</strong> : ' + SV.esc(B.tableError) + '. Crée la table <strong>' + CFG.table + '</strong> (colonnes ' + CFG.cols.type + ', ' + CFG.cols.fichier + ' en Pièces jointes, ' + CFG.cols.le + ', ' + CFG.cols.par + ') ; en attendant, le chargement manuel reste possible.</span><button class="btn btn-sm" data-action="grist-check">Réessayer</button></div>';
     if (B.busy) h += '<div class="banner banner-info"><span>⏳</span><span class="grow">' + SV.esc(B.busy) + '</span></div>';
+    h += orderHtml('source') + orderHtml('gel');
     Object.keys(B.offers).forEach(function (k) { h += offerHtml(k, B.offers[k]); });
-    h += '<div class="banner banner-info grist-line"><span>🔗</span><span class="grow"><strong>Grist</strong>' + (B.docName ? ' « ' + SV.esc(B.docName) + ' »' : '') + ' · ' + depotLine('source') + ' · ' + depotLine('gel') + '</span>' +
+    h += '<div class="banner banner-info grist-line"><span>🔗</span><span class="grow"><strong>Grist</strong> <span title="' + SV.esc('Identifiant du document : ' + B.docId + (B.label ? '' : ' · pour afficher un nom : panneau Créateur du widget, « Ouvrir la configuration »')) + '">« ' + SV.esc(docTitle()) + ' »</span> · ' + depotLine('source') + ' · ' + depotLine('gel') + '</span>' +
       '<button class="btn btn-sm" data-action="grist-check"' + (B.busy ? ' disabled' : '') + ' title="Relire la table ' + CFG.table + '">Vérifier les dépôts</button></div>';
     return h;
   }
@@ -10772,20 +10941,42 @@ var SV = (function (g) {
     var lim = st.settings.threshold || 24;
     return { acquis: acquis, reste: Math.max(0, lim - acquis), limite: lim, modules: mods, actif: !!(SV.gelActive && SV.gelActive()) };
   }
-  /** Badge « C1 » placé à côté du nom : heures accordées en campagne 1 et reste sur la limite. */
-  function gelBadge(c) {
+  /** Badge « C1 » placé à côté du nom : heures accordées en campagne 1 et reste sur la limite.
+   *  v3.2.0-alpha5 : `module` (facultatif) = module affiché. Le badge dit alors
+   *   - « hors quota » (grisé) quand la limite ne joue pas ici : atelier CP50, module exempté, discipline hors limite ;
+   *   - « dont ce module » quand le module affiché a été retenu en campagne 1 : ses heures sont déjà dans l'acquis et ne
+   *     sont pas comptées deux fois (pas de « quota atteint » rouge qui ferait croire à une erreur de la sélection auto). */
+  function gelBadge(c, module) {
     if (!c || !c.personKey) return '';
     var gi = gelInfo(c.personKey, c.gelId);
-    if (!gi) return '';
+    if (!gi || !(gi.acquis > 0)) return '';   // alpha5 : rien d'acquis (modules tous exemptés ou CP50) : pas de « C1 0 h »
     var f = SV.ui && SV.ui.fmtH ? SV.ui.fmtH : String;
+    var st = SV.store.state, code = module && module.code ? String(module.code).trim() : '';
+    var cp = st.source && st.source.idx ? st.source.idx.cp50Codes : null;
+    var hors = '';
+    if (module && (module.isCP50 || (cp && code && cp.has(code)))) hors = 'atelier CP50, hors quota';
+    else if (code && ((SV.gelExempt && SV.gelExempt(code)) || (st.settings.gelExemptes || []).some(function (x) { return String(x || '').trim() === code; }))) hors = 'module exempté du quota (Réglages)';
+    else if (c.discExcluded) hors = 'discipline hors limite d\'heures';
+    var ceMod = code ? gi.modules.filter(function (m) { return m.code === code && !m.exempt; })[0] : null;
     var plein = gi.acquis >= gi.limite;
-    var detail = gi.modules.map(function (m) { return m.code + ' : ' + f(m.heures) + ' h' + (m.exempt ? ' (exempté)' : ''); }).join(', ');
-    var title = 'Heures accordées en campagne 1 (gel) : ' + f(gi.acquis) + ' h' + (detail ? ' (' + detail + ')' : '') + '. Reste ' + f(gi.reste) + ' h sur ' + gi.limite + ' h.' +
-      (gi.actif ? '' : ' Non compté dans les totaux : case « Tenir compte du gel » décochée dans les Réglages.');
-    return ' <span class="badge badge-gel' + (plein ? ' plein' : '') + (gi.actif ? '' : ' inactif') + '" title="' + SV.esc(title) + '">C1 ' + f(gi.acquis) + ' h' + (plein ? ' · quota atteint' : ' · reste ' + f(gi.reste) + ' h') + '</span>';
+    var detail = gi.modules.map(function (m) { return m.code + ' : ' + f(m.heures) + ' h' + (m.exempt ? ' (exempté)' : '') + (m.code === code ? ' (ce module)' : ''); }).join(', ');
+    var title = 'Heures accordées en campagne 1 (gel) : ' + f(gi.acquis) + ' h' + (detail ? ' (' + detail + ')' : '') + '. Reste ' + f(gi.reste) + ' h sur ' + gi.limite + ' h.';
+    var cls = '', txt;
+    if (hors) {
+      cls = ' hors'; txt = 'C1 ' + f(gi.acquis) + ' h · hors quota';
+      title += ' La limite ne joue pas ici : ' + hors + '.';
+    } else if (ceMod) {
+      var sans = Math.max(0, gi.acquis - ceMod.heures);
+      cls = ' dans'; txt = 'C1 ' + f(gi.acquis) + ' h dont ce module';
+      title += ' Ce module a été retenu en campagne 1 (' + f(ceMod.heures) + ' h) : ses heures sont déjà dans l\'acquis et ne sont pas comptées une seconde fois. Hors ce module : ' + f(sans) + ' h en campagne 1.';
+    } else {
+      cls = plein ? ' plein' : ''; txt = 'C1 ' + f(gi.acquis) + ' h' + (plein ? ' · quota atteint' : ' · reste ' + f(gi.reste) + ' h');
+    }
+    if (!gi.actif) title += ' Non compté dans les totaux : case « Tenir compte du gel » décochée dans les Réglages.';
+    return ' <span class="badge badge-gel' + cls + (gi.actif ? '' : ' inactif') + '" title="' + SV.esc(title) + '">' + txt + '</span>';
   }
 
-  SV.grist = { prepare: prepare, start: start, check: check, state: B, gelInfo: gelInfo, gelBadge: gelBadge, dateInName: dateInName, CFG: CFG };
+  SV.grist = { prepare: prepare, start: start, check: check, state: B, gelInfo: gelInfo, gelBadge: gelBadge, dateInName: dateInName, docTitle: docTitle, CFG: CFG };
 })(SV);
 
 

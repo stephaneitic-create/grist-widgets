@@ -6702,6 +6702,9 @@ var SV = (function (g) {
 
   var corr = { byKey: {}, n: 0, at: null };   // clé personne → [courriels] (Corrections_identites)
 
+  /** Clé de comparaison des corrections, tolérante à la saisie manuelle : tiret simple ou double (noms doubles de l'état
+   *  civil, « ARRIEU--COSCULLUELA » dans SOFIA), espaces autour d'un tiret, apostrophe droite ou courbe. */
+  function tolKey(k) { return String(k || '').replace(/[\u2018\u2019]/g, "'").replace(/\s*-+\s*/g, '-').replace(/\s*'\s*/g, "'"); }
   function low(x) { return x === null || x === undefined ? '' : String(x).trim().toLowerCase(); }
   function uniq(a) { var o = [], s = {}; a.forEach(function (x) { if (x && !s[x]) { s[x] = true; o.push(x); } }); return o; }
 
@@ -6709,7 +6712,7 @@ var SV = (function (g) {
   function setCorrections(list) {
     var by = {}, n = 0;
     (list || []).forEach(function (r) {
-      var k = SV.personKey(r.nom, r.prenom), m = low(r.courriel);
+      var k = tolKey(SV.personKey(r.nom, r.prenom)), m = low(r.courriel);
       if (!k || k === '|' || !m) return;
       var a = by[k] || (by[k] = []);
       if (a.indexOf(m) === -1) { a.push(m); n++; }
@@ -6726,7 +6729,7 @@ var SV = (function (g) {
     c.mailVia = c.mail ? (c.mailVia || 'source') : '';
     c.mailManquant = null;
     if (!c.mail) {
-      var cs = corr.byKey[c.personKey] || [];
+      var cs = corr.byKey[tolKey(c.personKey)] || [];
       if (cs.length === 1) { c.mail = cs[0]; c.mailVia = 'correction'; }
       else if (cs.length > 1) {
         // plusieurs corrections pour ce nom (homonymes corrigés tous les deux) : celle dont la discipline correspond
@@ -6786,7 +6789,7 @@ var SV = (function (g) {
     })).join('\n');
   }
 
-  SV.identite = { setCorrections: setCorrections, resolveOne: resolveOne, resolveAll: resolveAll, proposals: proposals, proposalsTsv: proposalsTsv,
+  SV.identite = { tolKey: tolKey, setCorrections: setCorrections, resolveOne: resolveOne, resolveAll: resolveAll, proposals: proposals, proposalsTsv: proposalsTsv,
     corrections: function () { return corr; } };
   SV.identResolveAll = resolveAll;
 })(SV);

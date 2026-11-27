@@ -11244,7 +11244,7 @@ var SV = (function (g) {
 
   var D = {
     on: false, started: false, schema: null, schemaError: '', schemaWarn: [], cols: {},
-    rows: [], byCle: {}, byKey: {}, lastRead: null, readError: '', readMs: 0, nRows: 0,
+    rows: [], byCle: {}, byKey: {}, lastRead: null, readError: '', readMs: 0, nRows: 0, nTotal: 0, nAutres: 0,
     queue: [], sending: false, offline: false, lastSync: null, bilan: null,
     motifs: null, corrections: 0, hors: [], localOnly: [], localOnlyShown: false,
     sourceTable: '', lastPersist: 0, timers: {}
@@ -11382,13 +11382,16 @@ var SV = (function (g) {
       code: str(get(C.code)).replace(/\.0+$/, ''), session: str(get(C.session)).replace(/\.0+$/, ''), groupe: str(get(C.groupe)).replace(/\.0+$/, ''),
       decision: str(get(C.decision)), motifId: typeof mid === 'number' ? mid : null, motifTxt: typeof mid === 'string' ? mid : '',
       origine: str(get(C.origine)), version: Number(get(C.version)) || 0, auteur: str(get(C.auteur)), auteurMail: str(get(C.auteurMail)).toLowerCase(),
-      ts: tsOf(get(C.horo)) };
+      ts: tsOf(get(C.horo)), campagne: str(get(C.campagne)) };
     r.personKey = SV.personKey(r.nom, r.prenom);
     r.key = SV.decisionKey(r.personKey, r.code);
     r.motifCode = r.motifId && D.motifs ? (D.motifs.byRow[r.motifId] || '') : (r.motifTxt ? r.motifTxt.toUpperCase() : '');
     r.value = r.decision === 'Oui' || r.decision === 'Non' ? r.decision : 'En attente';
     return r;
   }
+  /** Lignes d'une autre campagne (décisions fictives « FICTIF » de creer_schema_verificateur.py --fictives) : lues et
+   *  comptées (la mesure du temps de lecture les inclut), jamais appliquées, jamais alertées. */
+  function inCampagne(r) { return !r.campagne || r.campagne === CFG.campagne; }
   function index(rows) {
     var byCle = {}, byKey = {};
     rows.forEach(function (r) { if (r.cle) byCle[r.cle] = r; (byKey[r.key] = byKey[r.key] || []).push(r); });
@@ -11408,6 +11411,7 @@ var SV = (function (g) {
       return wt(api().fetchTable(CFG.t.etat), 60000, 'lecture de ' + CFG.t.etat).then(function (cols) {
         var rows = [];
         (cols.id || []).forEach(function (id, i) { rows.push(rowFrom(function (c) { return cols[c] ? cols[c][i] : null; }, id)); });
+        D.nTotal = rows.length; rows = rows.filter(inCampagne); D.nAutres = D.nTotal - rows.length;
         index(rows);
         D.readMs = Date.now() - t0; D.lastRead = Date.now(); D.readError = ''; D.offline = false;
         applyRemote();
@@ -11546,6 +11550,7 @@ var SV = (function (g) {
         var rows = [].concat.apply([], parts);
         // garde-fou : la dernière lecture complète connaissait des lignes de ces modules, la lecture filtrée n'en rend aucune
         // (filtre mal interprété) : on relit la table entière plutôt que de créer des doublons
+        rows = rows.filter(inCampagne);
         var connues = D.rows.filter(function (r) { return codes.indexOf(r.code) !== -1; }).length;
         if (connues && !rows.length) { var e2 = new Error('lecture filtrée vide alors que ' + connues + ' ligne(s) sont connues'); e2.http = 200; throw e2; }
         return rows;
@@ -11554,7 +11559,7 @@ var SV = (function (g) {
       if (isNetwork(e) && !e.http) throw e;
       log('lecture filtrée impossible (' + msg(e) + '), relecture de la table entière', 'warn');
       return wt(a.fetchTable(CFG.t.etat), 60000, 'lecture de ' + CFG.t.etat).then(function (cols) {
-        var rows = []; (cols.id || []).forEach(function (id, i) { var r = rowFrom(function (c) { return cols[c] ? cols[c][i] : null; }, id); if (codes.indexOf(r.code) !== -1) rows.push(r); }); return rows;
+        var rows = []; (cols.id || []).forEach(function (id, i) { var r = rowFrom(function (c) { return cols[c] ? cols[c][i] : null; }, id); if (codes.indexOf(r.code) !== -1 && inCampagne(r)) rows.push(r); }); return rows;
       });
     });
   }
@@ -11766,7 +11771,7 @@ var SV = (function (g) {
     if (!D.on) return ' · <strong>Décisions</strong> : ' + (D.schemaError ? '<span class="t-ko">désactivées</span>' : 'sur ce poste (pas de table ' + CFG.t.etat + ')');
     var c = counts(), nq = D.queue.length;
     var etat = D.offline ? '<span class="t-ko">Grist injoignable</span>' : D.readError ? '<span class="t-ko">lecture en erreur</span>' : '<span class="t-ok">en direct</span>';
-    return ' · <strong>Décisions</strong> : ' + etat + ' (' + SV.ui.fmtN(D.nRows) + ' ligne' + (D.nRows > 1 ? 's' : '') + (D.lastRead ? ', lue' + (D.nRows > 1 ? 's' : '') + ' en ' + D.readMs + ' ms' : '') + ')' +
+    return ' · <strong>Décisions</strong> : ' + etat + ' (' + SV.ui.fmtN(D.nRows) + ' ligne' + (D.nRows > 1 ? 's' : '') + (D.nAutres ? ' en ' + CFG.campagne + ', ' + SV.ui.fmtN(D.nAutres) + ' d\'une autre campagne ignorée' + (D.nAutres > 1 ? 's' : '') : '') + (D.lastRead ? ', ' + SV.ui.fmtN(D.nTotal || D.nRows) + ' lue' + ((D.nTotal || D.nRows) > 1 ? 's' : '') + ' en ' + D.readMs + ' ms' : '') + ')' +
       (nq ? ' · <span class="' + (c.conflict || c.error ? 't-ko' : 't-amber') + '">' + nq + ' à envoyer</span>' : D.sending ? ' · envoi…' : '') +
       ' <button class="btn btn-xs" data-action="gd-sync"' + (D.sending ? ' disabled' : '') + ' title="Envoyer les décisions en attente et relire Decisions_etat">Synchroniser</button>';
   }
